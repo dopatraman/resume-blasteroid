@@ -39,6 +39,15 @@ class Game {
     this.shipRespawnDelay = 120;   // 2 seconds before respawn
     this.deathRings = [];          // Pulsing rings effect
     this.shipDebris = [];          // Ship debris particles
+
+    // Charged shot
+    this.isCharging = false;
+    this.chargeLevel = 0;
+    this.maxChargeLevel = 90;      // 1.5 seconds at 60fps
+    this.chargeParticles = [];
+    this.spaceHeld = false;
+    this.spaceHoldTime = 0;
+    this.chargeThreshold = 12;     // ~200ms before charging starts
   }
 
   init() {
@@ -88,6 +97,9 @@ class Game {
 
     // Update particles
     this.updateParticles();
+
+    // Update charging
+    this.updateCharging();
 
     // Check bullet-asteroid collisions
     this.checkCollisions();
@@ -357,9 +369,110 @@ class Game {
     this.fadeDirection = -1;  // Fade in
   }
 
-  fire() {
-    if (this.state === GameState.PLAYING) {
+  startCharging() {
+    if (this.state === GameState.PLAYING && this.ship) {
+      this.spaceHeld = true;
+      this.spaceHoldTime = 0;
+    }
+  }
+
+  releaseCharge() {
+    if (this.state !== GameState.PLAYING || !this.ship) {
+      this.spaceHeld = false;
+      this.isCharging = false;
+      return;
+    }
+
+    if (this.isCharging) {
+      // Fire charged shot
+      let bullet = this.ship.fireCharged(this.chargeLevel, this.maxChargeLevel);
+      this.bullets.push(bullet);
+    } else if (this.spaceHeld) {
+      // Quick tap - fire normal bullet
       this.bullets.push(this.ship.fire());
+    }
+
+    // Reset all charging state
+    this.spaceHeld = false;
+    this.spaceHoldTime = 0;
+    this.isCharging = false;
+    this.chargeLevel = 0;
+    this.chargeParticles = [];
+  }
+
+  updateCharging() {
+    if (!this.ship) return;
+
+    // Track how long space has been held
+    if (this.spaceHeld && !this.isCharging) {
+      this.spaceHoldTime++;
+      // Start charging after threshold
+      if (this.spaceHoldTime >= this.chargeThreshold) {
+        this.isCharging = true;
+      }
+    }
+
+    // Only proceed with charging effects if actually charging
+    if (!this.isCharging) return;
+
+    // Increment charge level
+    if (this.chargeLevel < this.maxChargeLevel) {
+      this.chargeLevel++;
+    }
+
+    // Get ship nose position for particles
+    let nosePos = this.ship.getNosePosition();
+    let chargePercent = this.chargeLevel / this.maxChargeLevel;
+
+    // Spawn energy particles flowing inward (more as charge increases)
+    let spawnRate = 1 + floor(chargePercent * 3);  // 1-4 particles per frame
+    for (let i = 0; i < spawnRate; i++) {
+      // Spawn in a ring around the ship
+      let angle = random(TWO_PI);
+      let distance = random(80, 120);
+      let spawnPos = createVector(
+        nosePos.x + cos(angle) * distance,
+        nosePos.y + sin(angle) * distance
+      );
+
+      // Calculate velocity toward nose
+      let toNose = p5.Vector.sub(nosePos, spawnPos);
+      let speed = 3 + chargePercent * 4;  // Faster as charge increases
+      toNose.setMag(speed);
+
+      this.chargeParticles.push({
+        pos: spawnPos,
+        vel: toNose,
+        target: nosePos.copy(),
+        life: 30,
+        maxLife: 30,
+        size: random(2, 4)
+      });
+    }
+
+    // Update charge particles
+    for (let i = this.chargeParticles.length - 1; i >= 0; i--) {
+      let p = this.chargeParticles[i];
+
+      // Update target to current nose position (ship might move)
+      p.target = this.ship.getNosePosition();
+
+      // Steer toward target
+      let toTarget = p5.Vector.sub(p.target, p.pos);
+      if (toTarget.mag() < 10) {
+        // Close enough, remove particle
+        this.chargeParticles.splice(i, 1);
+        continue;
+      }
+      toTarget.setMag(p.vel.mag() * 1.05);  // Accelerate slightly
+      p.vel = toTarget;
+
+      p.pos.add(p.vel);
+      p.life--;
+
+      if (p.life <= 0) {
+        this.chargeParticles.splice(i, 1);
+      }
     }
   }
 
@@ -410,6 +523,9 @@ class Game {
       this.ship.render();
     }
 
+    // Draw charging effect
+    this.renderCharging();
+
     // Draw death effects
     this.renderDeathEffects();
 
@@ -427,6 +543,60 @@ class Game {
         this.drawInstructions();
       }
     }
+  }
+
+  renderCharging() {
+    if (!this.isCharging || !this.ship) return;
+
+    let c = color(PALETTE.ship);
+    let r = red(c), g = green(c), b = blue(c);
+    let chargePercent = this.chargeLevel / this.maxChargeLevel;
+    let nosePos = this.ship.getNosePosition();
+
+    // Draw energy particles flowing inward
+    for (let p of this.chargeParticles) {
+      let alpha = map(p.life, 0, p.maxLife, 50, 255);
+      noStroke();
+
+      // Outer glow
+      fill(r, g, b, alpha * 0.3);
+      ellipse(p.pos.x, p.pos.y, p.size * 3, p.size * 3);
+
+      // Core
+      fill(r, g, b, alpha);
+      ellipse(p.pos.x, p.pos.y, p.size, p.size);
+
+      // White center
+      fill(255, 255, 255, alpha * 0.5);
+      ellipse(p.pos.x, p.pos.y, p.size * 0.4, p.size * 0.4);
+    }
+
+    // Draw growing orb at ship nose
+    let baseSize = 5;
+    let maxGrowth = 20;
+    let orbSize = baseSize + chargePercent * maxGrowth;
+    let pulse = sin(frameCount * 0.2) * 0.2 + 1;  // Pulsing effect
+
+    // Outer glow
+    fill(r, g, b, 50 + chargePercent * 50);
+    noStroke();
+    ellipse(nosePos.x, nosePos.y, orbSize * 4 * pulse, orbSize * 4 * pulse);
+
+    // Middle glow
+    fill(r, g, b, 100 + chargePercent * 100);
+    ellipse(nosePos.x, nosePos.y, orbSize * 2.5 * pulse, orbSize * 2.5 * pulse);
+
+    // Inner glow
+    fill(r, g, b, 180 + chargePercent * 75);
+    ellipse(nosePos.x, nosePos.y, orbSize * 1.5, orbSize * 1.5);
+
+    // Bright core
+    fill(255, 255, 200, 200 + chargePercent * 55);
+    ellipse(nosePos.x, nosePos.y, orbSize, orbSize);
+
+    // White-hot center
+    fill(255, 255, 255, 220 + chargePercent * 35);
+    ellipse(nosePos.x, nosePos.y, orbSize * 0.5, orbSize * 0.5);
   }
 
   renderDeathEffects() {
@@ -497,38 +667,97 @@ class Game {
   }
 
   drawInstructions() {
-    // Draw legend in bottom left
-    let legendX = 20;
-    let legendY = height - 60;
+    let bottomMargin = 40;
+    let rowY = height - bottomMargin;
     let boxSize = 12;
-    let spacing = 80;
+    let legendSpacing = 70;
+
+    // --- Legend (left side) ---
+    let legendX = 30;
 
     textAlign(LEFT, CENTER);
-    textSize(12);
+    textSize(11);
 
     // Work - Orange
     fill(PALETTE.asteroids.work);
     noStroke();
-    rect(legendX, legendY, boxSize, boxSize);
+    rect(legendX, rowY - boxSize / 2, boxSize, boxSize);
     fill(PALETTE.textDim);
-    text('Work', legendX + boxSize + 8, legendY + boxSize / 2);
+    text('Work', legendX + boxSize + 6, rowY);
 
     // About - Blue
     fill(PALETTE.asteroids.about);
-    rect(legendX + spacing, legendY, boxSize, boxSize);
+    rect(legendX + legendSpacing, rowY - boxSize / 2, boxSize, boxSize);
     fill(PALETTE.textDim);
-    text('About', legendX + spacing + boxSize + 8, legendY + boxSize / 2);
+    text('About', legendX + legendSpacing + boxSize + 6, rowY);
 
     // Resume - Yellow
     fill(PALETTE.asteroids.resume);
-    rect(legendX + spacing * 2, legendY, boxSize, boxSize);
+    rect(legendX + legendSpacing * 2, rowY - boxSize / 2, boxSize, boxSize);
     fill(PALETTE.textDim);
-    text('Resume', legendX + spacing * 2 + boxSize + 8, legendY + boxSize / 2);
+    text('Resume', legendX + legendSpacing * 2 + boxSize + 6, rowY);
 
-    // Controls hint centered at bottom
+    // --- Controls (right side) ---
+    this.drawControlsHint(rowY);
+  }
+
+  drawControlsHint(rowY) {
+    let keySize = 18;
+    let keyGap = 2;
+    let rightMargin = 30;
+
+    // Position from right edge
+    let controlsEndX = width - rightMargin;
+
+    // "shoot" text and spacebar
+    let spaceWidth = 45;
+    textAlign(LEFT, CENTER);
+    textSize(11);
     fill(PALETTE.textDim);
-    textAlign(CENTER, CENTER);
-    textSize(14);
-    text('Arrow Keys to Move  |  Space to Shoot', width / 2, height - 20);
+    noStroke();
+
+    let shootTextX = controlsEndX - 30;
+    text('shoot', shootTextX, rowY);
+
+    let spaceX = shootTextX - spaceWidth - 10;
+    this.drawKey(spaceX, rowY - keySize / 2, keySize, '', spaceWidth);
+
+    // "move" text
+    let moveTextX = spaceX - 45;
+    text('move', moveTextX, rowY);
+
+    // Arrow keys layout (keyboard style)
+    //     [↑]
+    // [←][↓][→]
+    let arrowsRightEdge = moveTextX - 15;
+    let arrowsCenterX = arrowsRightEdge - keySize - keyGap - keySize / 2;
+
+    // Up arrow (centered above down)
+    this.drawKey(arrowsCenterX - keySize / 2, rowY - keySize - keyGap / 2 - keySize / 2, keySize, '↑');
+
+    // Left, Down, Right arrows
+    this.drawKey(arrowsCenterX - keySize / 2 - keyGap - keySize, rowY - keySize / 2, keySize, '←');
+    this.drawKey(arrowsCenterX - keySize / 2, rowY - keySize / 2, keySize, '↓');
+    this.drawKey(arrowsCenterX + keySize / 2 + keyGap, rowY - keySize / 2, keySize, '→');
+  }
+
+  drawKey(x, y, size, label, width = null) {
+    let w = width || size;
+    let r = 4;  // Corner radius
+
+    // Key background
+    stroke(PALETTE.textDim);
+    strokeWeight(1);
+    fill(PALETTE.background);
+    rect(x, y, w, size, r);
+
+    // Key label
+    if (label) {
+      fill(PALETTE.textDim);
+      noStroke();
+      textAlign(CENTER, CENTER);
+      textSize(11);
+      text(label, x + w / 2, y + size / 2);
+    }
   }
 }

@@ -89,11 +89,16 @@ class Ship {
     if (this.pos.y < -this.size) this.pos.y = height + this.size;
   }
 
+  getNosePosition() {
+    let nose = p5.Vector.fromAngle(this.rotation);
+    nose.mult(this.size);
+    nose.add(this.pos);
+    return nose;
+  }
+
   fire() {
     // Create bullet at ship's nose
-    let bulletPos = p5.Vector.fromAngle(this.rotation);
-    bulletPos.mult(this.size);
-    bulletPos.add(this.pos);
+    let bulletPos = this.getNosePosition();
 
     let bulletVel = p5.Vector.fromAngle(this.rotation);
     bulletVel.mult(SHAPES.bullet.speed);
@@ -103,6 +108,24 @@ class Ship {
     this.emitMuzzleFlash(bulletPos);
 
     return new Bullet(bulletPos.x, bulletPos.y, bulletVel.x, bulletVel.y);
+  }
+
+  fireCharged(chargeLevel, maxCharge) {
+    let nosePos = this.getNosePosition();
+
+    // Scale bullet size based on charge (1x to 4x)
+    let chargePercent = chargeLevel / maxCharge;
+    let bulletScale = 1 + chargePercent * 3;
+
+    let bulletVel = p5.Vector.fromAngle(this.rotation);
+    // Slightly faster when charged
+    bulletVel.mult(SHAPES.bullet.speed * (0.8 + chargePercent * 0.4));
+    bulletVel.add(this.vel);
+
+    // Bigger muzzle flash for charged shot
+    this.emitChargedMuzzleFlash(nosePos, chargePercent);
+
+    return new Bullet(nosePos.x, nosePos.y, bulletVel.x, bulletVel.y, bulletScale);
   }
 
   emitMuzzleFlash(nosePos) {
@@ -116,6 +139,23 @@ class Ship {
         life: random(8, 15),
         maxLife: 15,
         size: random(2, 5)
+      });
+    }
+  }
+
+  emitChargedMuzzleFlash(nosePos, chargePercent) {
+    // Create a bigger burst of particles based on charge level
+    let numParticles = 10 + floor(chargePercent * 20);  // 10-30 particles
+    for (let i = 0; i < numParticles; i++) {
+      let angle = this.rotation + random(-0.6, 0.6);
+      let speed = random(3, 8) * (0.8 + chargePercent * 0.5);
+      let size = random(3, 8) * (1 + chargePercent);
+      this.muzzleParticles.push({
+        pos: nosePos.copy(),
+        vel: p5.Vector.fromAngle(angle).mult(speed),
+        life: random(12, 25),
+        maxLife: 25,
+        size: size
       });
     }
   }
