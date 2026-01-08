@@ -328,8 +328,8 @@ class Game {
       pos: pos.copy(),
       type: type,
       radius: 40,
-      life: 120,          // 2 seconds at 60fps
-      maxLife: 120,
+      life: 300,          // 5 seconds at 60fps
+      maxLife: 300,
       color: PALETTE.asteroids[type]
     });
   }
@@ -697,27 +697,41 @@ class Game {
       let pulse = sin(frameCount * 0.15) * 0.2 + 1;
       let size = portal.radius * pulse;
 
-      noFill();
+      noStroke();
 
-      // Outer glow ring
-      stroke(r, g, b, alpha * 0.3);
-      strokeWeight(8);
+      // Outer glow circle (filled)
+      fill(r, g, b, alpha * 0.15);
       ellipse(portal.pos.x, portal.pos.y, size * 2.5, size * 2.5);
 
-      // Middle ring
-      stroke(r, g, b, alpha * 0.6);
-      strokeWeight(4);
+      // Middle circle (filled)
+      fill(r, g, b, alpha * 0.25);
       ellipse(portal.pos.x, portal.pos.y, size * 2, size * 2);
 
-      // Inner ring (bright)
-      stroke(r, g, b, alpha);
-      strokeWeight(2);
+      // Inner circle (filled, brighter)
+      fill(r, g, b, alpha * 0.4);
       ellipse(portal.pos.x, portal.pos.y, size * 1.5, size * 1.5);
 
-      // White core ring
-      stroke(255, 255, 255, alpha * 0.7);
-      strokeWeight(1);
+      // Core circle (white-ish)
+      fill(255, 255, 255, alpha * 0.3);
       ellipse(portal.pos.x, portal.pos.y, size, size);
+
+      // Ring outlines for definition
+      noFill();
+      stroke(r, g, b, alpha * 0.6);
+      strokeWeight(2);
+      ellipse(portal.pos.x, portal.pos.y, size * 2, size * 2);
+
+      stroke(r, g, b, alpha);
+      strokeWeight(1);
+      ellipse(portal.pos.x, portal.pos.y, size * 1.5, size * 1.5);
+
+      // "Enter" label
+      let labelAlpha = alpha * (0.5 + sin(frameCount * 0.1) * 0.3);  // Ephemeral pulse
+      fill(255, 255, 255, labelAlpha);
+      noStroke();
+      textAlign(CENTER, CENTER);
+      textSize(12);
+      text('Enter', portal.pos.x, portal.pos.y);
     }
   }
 
