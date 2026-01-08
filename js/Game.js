@@ -47,8 +47,14 @@ class Game {
     this.spaceHoldTime = 0;
     this.chargeThreshold = 12;     // ~200ms before charging starts
 
-    // Homing toggle
-    this.homingEnabled = true;
+    // Powerups
+    this.powerups = [];           // Floating powerup entities
+    this.powerupDrops = [];       // Collectibles after shooting
+    this.activePowerups = {       // Currently held powerups
+      homing: false
+    };
+    this.powerupSpawnTimer = 0;
+    this.powerupSpawnInterval = 600;  // 10 seconds at 60fps
   }
 
   init() {
@@ -85,7 +91,7 @@ class Game {
 
     // Update bullets
     for (let i = this.bullets.length - 1; i >= 0; i--) {
-      this.bullets[i].update(this.homingEnabled ? this.asteroids : []);
+      this.bullets[i].update(this.activePowerups.homing ? this.asteroids : []);
       if (this.bullets[i].isDead()) {
         this.bullets.splice(i, 1);
       }
@@ -111,6 +117,13 @@ class Game {
     // Update portals and check if ship enters one
     this.updatePortals();
     this.checkPortalCollisions();
+
+    // Update powerups
+    this.updatePowerups();
+    this.updatePowerupDrops();
+    this.checkPowerupCollisions();
+    this.checkPowerupDropCollisions();
+    this.managePowerups();
 
     // Spawn new asteroids if needed
     this.manageAsteroids();
@@ -204,6 +217,9 @@ class Game {
     this.ship = null;
     this.state = GameState.DEAD;
     this.shipDeathTimer = 0;
+
+    // Reset all powerups on death
+    this.activePowerups.homing = false;
   }
 
   updateDeath() {
@@ -323,6 +339,74 @@ class Game {
 
       this.asteroids.push(Asteroid.spawnFromEdge(spawnType));
       this.spawnTimer = 0;
+    }
+  }
+
+  // Powerup methods
+  updatePowerups() {
+    for (let powerup of this.powerups) {
+      powerup.update();
+    }
+  }
+
+  updatePowerupDrops() {
+    for (let i = this.powerupDrops.length - 1; i >= 0; i--) {
+      this.powerupDrops[i].update();
+      if (this.powerupDrops[i].isDead()) {
+        this.powerupDrops.splice(i, 1);
+      }
+    }
+  }
+
+  checkPowerupCollisions() {
+    // Check if bullets hit powerups
+    for (let i = this.bullets.length - 1; i >= 0; i--) {
+      for (let j = this.powerups.length - 1; j >= 0; j--) {
+        if (this.powerups[j].hits(this.bullets[i])) {
+          // Create powerup drop at powerup position
+          let powerup = this.powerups[j];
+          this.powerupDrops.push(new PowerupDrop(powerup.pos.x, powerup.pos.y, powerup.type));
+
+          // Remove bullet and powerup
+          this.bullets.splice(i, 1);
+          this.powerups.splice(j, 1);
+          return;
+        }
+      }
+    }
+  }
+
+  checkPowerupDropCollisions() {
+    if (!this.ship) return;
+
+    for (let i = this.powerupDrops.length - 1; i >= 0; i--) {
+      let drop = this.powerupDrops[i];
+      let d = dist(this.ship.pos.x, this.ship.pos.y, drop.pos.x, drop.pos.y);
+      if (d < drop.radius + this.ship.size * 0.5) {
+        // Activate powerup
+        this.activatePowerup(drop.type);
+        this.powerupDrops.splice(i, 1);
+        return;
+      }
+    }
+  }
+
+  activatePowerup(type) {
+    switch (type) {
+      case 'homing':
+        this.activePowerups.homing = true;
+        break;
+    }
+  }
+
+  managePowerups() {
+    this.powerupSpawnTimer++;
+
+    // Spawn powerup periodically
+    if (this.powerupSpawnTimer >= this.powerupSpawnInterval && this.powerups.length < 2) {
+      // Only spawn homing for now
+      this.powerups.push(Powerup.spawnFromEdge('homing'));
+      this.powerupSpawnTimer = 0;
     }
   }
 
@@ -543,6 +627,14 @@ class Game {
     // Draw portals
     this.renderPortals();
 
+    // Draw powerups and drops
+    for (let powerup of this.powerups) {
+      powerup.render();
+    }
+    for (let drop of this.powerupDrops) {
+      drop.render();
+    }
+
     // Draw bullets
     for (let bullet of this.bullets) {
       bullet.render();
@@ -738,10 +830,6 @@ class Game {
     }
   }
 
-  toggleHoming() {
-    this.homingEnabled = !this.homingEnabled;
-  }
-
   drawScore() {
     fill(PALETTE.textDim);
     noStroke();
@@ -749,10 +837,23 @@ class Game {
     textSize(14);
     text(this.score, width - 20, 20);
 
-    // Homing mode indicator
+    // Active powerups display
+    this.drawActivePowerups();
+  }
+
+  drawActivePowerups() {
+    let yOffset = 45;
+    textAlign(RIGHT, TOP);
     textSize(11);
-    let homingText = this.homingEnabled ? 'Homing: ON' : 'Homing: OFF';
-    text(homingText, width - 20, 40);
+
+    if (this.activePowerups.homing) {
+      let c = color('#FF00FF');
+      fill(red(c), green(c), blue(c), 200);
+      text('Homing', width - 20, yOffset);
+      yOffset += 18;
+    }
+
+    // If no powerups active, show nothing (or could show "No powerups")
   }
 
   drawInstructions() {
