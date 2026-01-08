@@ -46,6 +46,9 @@ class Game {
     this.spaceHeld = false;
     this.spaceHoldTime = 0;
     this.chargeThreshold = 12;     // ~200ms before charging starts
+
+    // Homing toggle
+    this.homingEnabled = true;
   }
 
   init() {
@@ -82,7 +85,7 @@ class Game {
 
     // Update bullets
     for (let i = this.bullets.length - 1; i >= 0; i--) {
-      this.bullets[i].update();
+      this.bullets[i].update(this.homingEnabled ? this.asteroids : []);
       if (this.bullets[i].isDead()) {
         this.bullets.splice(i, 1);
       }
@@ -735,12 +738,21 @@ class Game {
     }
   }
 
+  toggleHoming() {
+    this.homingEnabled = !this.homingEnabled;
+  }
+
   drawScore() {
     fill(PALETTE.textDim);
     noStroke();
     textAlign(RIGHT, TOP);
     textSize(14);
     text(this.score, width - 20, 20);
+
+    // Homing mode indicator
+    textSize(11);
+    let homingText = this.homingEnabled ? 'Homing: ON' : 'Homing: OFF';
+    text(homingText, width - 20, 40);
   }
 
   drawInstructions() {

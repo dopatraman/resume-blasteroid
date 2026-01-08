@@ -17,6 +17,11 @@ function keyPressed() {
     return false;  // Prevent page scroll
   }
 
+  // H to toggle homing mode
+  if (key === 'h' || key === 'H') {
+    game.toggleHoming();
+  }
+
   // ESC to return to game from section
   if (keyCode === ESCAPE && game.state === GameState.SECTION) {
     game.returnToGame();

@@ -8,7 +8,15 @@ class Bullet {
     this.lifespan = this.baseLifespan;
   }
 
-  update() {
+  update(asteroids = []) {
+    // Heat-seeking for charged shots
+    if (this.scale > 1.5 && asteroids.length > 0) {
+      let closest = this.findClosestAsteroid(asteroids);
+      if (closest) {
+        this.steerTowards(closest);
+      }
+    }
+
     this.pos.add(this.vel);
     this.lifespan--;
 
@@ -21,6 +29,38 @@ class Bullet {
 
   isDead() {
     return this.lifespan <= 0;
+  }
+
+  findClosestAsteroid(asteroids) {
+    let closest = null;
+    let closestDist = Infinity;
+
+    for (let asteroid of asteroids) {
+      let d = dist(this.pos.x, this.pos.y, asteroid.pos.x, asteroid.pos.y);
+      if (d < closestDist) {
+        closestDist = d;
+        closest = asteroid;
+      }
+    }
+
+    return closest;
+  }
+
+  steerTowards(target) {
+    let speed = this.vel.mag();  // Save original speed
+
+    // Calculate desired direction to target
+    let desired = p5.Vector.sub(target.pos, this.pos);
+    desired.setMag(speed);
+
+    // Steering force = desired - current velocity
+    let steer = p5.Vector.sub(desired, this.vel);
+    let maxSteer = 0.3;  // Limit turn rate for smooth curve
+    steer.limit(maxSteer);
+
+    // Apply steering and restore speed
+    this.vel.add(steer);
+    this.vel.setMag(speed);  // Maintain constant speed
   }
 
   hits(asteroid) {
