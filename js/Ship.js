@@ -193,11 +193,11 @@ class Ship {
     stroke(PALETTE.ship);
     strokeWeight(1);
 
-    // Equilateral triangle ship pointing right (rotation 0 = right)
+    // Slightly isoceles triangle ship pointing right (rotation 0 = right)
     triangle(
       this.size, 0,
-      -this.size * 0.5, -this.size * 0.866,
-      -this.size * 0.5, this.size * 0.866
+      -this.size * 0.5, -this.size * 0.65,
+      -this.size * 0.5, this.size * 0.65
     );
 
     // Draw thrust flame when thrusting

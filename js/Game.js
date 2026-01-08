@@ -18,11 +18,6 @@ class Game {
     this.fadeAlpha = 0;
     this.fadeDirection = 0;  // 1 = fading out, -1 = fading in
 
-    // Explosion delay before transition
-    this.pendingSection = null;
-    this.transitionDelay = 0;
-    this.transitionDelayFrames = 18;  // ~0.30 seconds at 60fps
-
     // Asteroid management
     this.asteroidTypes = ['work', 'about', 'resume', 'neutral'];
     this.sectionTypes = ['work', 'about', 'resume'];
@@ -39,6 +34,9 @@ class Game {
     this.shipRespawnDelay = 120;   // 2 seconds before respawn
     this.deathRings = [];          // Pulsing rings effect
     this.shipDebris = [];          // Ship debris particles
+
+    // Portals
+    this.portals = [];
 
     // Charged shot
     this.isCharging = false;
@@ -107,15 +105,9 @@ class Game {
     // Check ship-asteroid collisions
     this.checkShipCollisions();
 
-    // Handle transition delay (show explosion before transitioning)
-    if (this.pendingSection) {
-      this.transitionDelay--;
-      if (this.transitionDelay <= 0) {
-        this.triggerTransition(this.pendingSection);
-        this.pendingSection = null;
-      }
-      return;  // Don't spawn new asteroids while waiting
-    }
+    // Update portals and check if ship enters one
+    this.updatePortals();
+    this.checkPortalCollisions();
 
     // Spawn new asteroids if needed
     this.manageAsteroids();
@@ -134,9 +126,6 @@ class Game {
   }
 
   checkCollisions() {
-    // Don't check collisions if we're waiting to transition
-    if (this.pendingSection) return;
-
     for (let i = this.bullets.length - 1; i >= 0; i--) {
       for (let j = this.asteroids.length - 1; j >= 0; j--) {
         if (this.bullets[i] && this.bullets[i].hits(this.asteroids[j])) {
@@ -144,8 +133,9 @@ class Game {
           let explosionParticles = this.asteroids[j].explode();
           this.particles.push(...explosionParticles);
 
-          // Get asteroid type before removing
+          // Get asteroid type and position before removing
           let asteroidType = this.asteroids[j].type;
+          let asteroidPos = this.asteroids[j].pos;
 
           // Award points
           this.score += 10;
@@ -154,10 +144,9 @@ class Game {
           this.bullets.splice(i, 1);
           this.asteroids.splice(j, 1);
 
-          // Only trigger transition for section asteroids (not neutral)
+          // Spawn portal for section asteroids (not neutral)
           if (asteroidType !== 'neutral') {
-            this.pendingSection = asteroidType;
-            this.transitionDelay = this.transitionDelayFrames;
+            this.spawnPortal(asteroidPos, asteroidType);
           }
           return;  // Exit after hit
         }
@@ -279,6 +268,30 @@ class Game {
     }
   }
 
+  updatePortals() {
+    for (let i = this.portals.length - 1; i >= 0; i--) {
+      let portal = this.portals[i];
+      portal.life--;
+      if (portal.life <= 0) {
+        this.portals.splice(i, 1);
+      }
+    }
+  }
+
+  checkPortalCollisions() {
+    if (!this.ship) return;
+
+    for (let i = this.portals.length - 1; i >= 0; i--) {
+      let portal = this.portals[i];
+      let d = dist(this.ship.pos.x, this.ship.pos.y, portal.pos.x, portal.pos.y);
+      if (d < portal.radius + this.ship.size * 0.3) {
+        this.triggerTransition(portal.type);
+        this.portals = [];  // Clear all portals on transition
+        return;
+      }
+    }
+  }
+
   manageAsteroids() {
     this.spawnTimer++;
 
@@ -308,6 +321,17 @@ class Game {
       this.asteroids.push(Asteroid.spawnFromEdge(spawnType));
       this.spawnTimer = 0;
     }
+  }
+
+  spawnPortal(pos, type) {
+    this.portals.push({
+      pos: pos.copy(),
+      type: type,
+      radius: 40,
+      life: 120,          // 2 seconds at 60fps
+      maxLife: 120,
+      color: PALETTE.asteroids[type]
+    });
   }
 
   triggerTransition(sectionType) {
@@ -513,6 +537,9 @@ class Game {
       asteroid.render();
     }
 
+    // Draw portals
+    this.renderPortals();
+
     // Draw bullets
     for (let bullet of this.bullets) {
       bullet.render();
@@ -655,6 +682,42 @@ class Game {
       // White hot center
       fill(255, 255, 255, alpha * 0.6);
       ellipse(d.pos.x, d.pos.y, d.size * 0.3, d.size * 0.3);
+    }
+  }
+
+  renderPortals() {
+    for (let portal of this.portals) {
+      let c = color(portal.color);
+      let r = red(c), g = green(c), b = blue(c);
+
+      // Fade out as life decreases
+      let alpha = map(portal.life, 0, portal.maxLife, 0, 255);
+
+      // Pulsing effect
+      let pulse = sin(frameCount * 0.15) * 0.2 + 1;
+      let size = portal.radius * pulse;
+
+      noFill();
+
+      // Outer glow ring
+      stroke(r, g, b, alpha * 0.3);
+      strokeWeight(8);
+      ellipse(portal.pos.x, portal.pos.y, size * 2.5, size * 2.5);
+
+      // Middle ring
+      stroke(r, g, b, alpha * 0.6);
+      strokeWeight(4);
+      ellipse(portal.pos.x, portal.pos.y, size * 2, size * 2);
+
+      // Inner ring (bright)
+      stroke(r, g, b, alpha);
+      strokeWeight(2);
+      ellipse(portal.pos.x, portal.pos.y, size * 1.5, size * 1.5);
+
+      // White core ring
+      stroke(255, 255, 255, alpha * 0.7);
+      strokeWeight(1);
+      ellipse(portal.pos.x, portal.pos.y, size, size);
     }
   }
 
