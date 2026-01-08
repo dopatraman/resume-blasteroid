@@ -79,18 +79,18 @@ class Asteroid {
   // Create explosion particles when destroyed
   explode() {
     let particles = [];
-    let numParticles = 15;
+    let numParticles = 50;
 
     for (let i = 0; i < numParticles; i++) {
       let angle = random(TWO_PI);
-      let speed = random(1, 4);
+      let speed = random(1.5, 5);
       particles.push({
         pos: this.pos.copy(),
         vel: p5.Vector.fromAngle(angle).mult(speed),
-        life: random(20, 40),
-        maxLife: 40,
+        life: random(40, 80),
+        maxLife: 80,
         color: this.color,
-        size: random(2, 6)
+        size: random(4, 14)
       });
     }
     return particles;
@@ -120,6 +120,26 @@ class Asteroid {
         y = random(height);
         break;
     }
+
+    let sizes = ['small', 'medium', 'large'];
+    let sizeKey = random(sizes);
+
+    return new Asteroid(x, y, type, sizeKey);
+  }
+
+  // Static method to spawn asteroid on screen (for initial load)
+  static spawnOnScreen(type) {
+    let x, y;
+    let margin = 100;
+    let centerX = width / 2;
+    let centerY = height / 2;
+    let safeRadius = 150;  // Keep away from ship spawn point
+
+    // Keep trying until we get a position away from center
+    do {
+      x = random(margin, width - margin);
+      y = random(margin, height - margin);
+    } while (dist(x, y, centerX, centerY) < safeRadius);
 
     let sizes = ['small', 'medium', 'large'];
     let sizeKey = random(sizes);

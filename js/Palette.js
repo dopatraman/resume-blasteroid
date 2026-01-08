@@ -5,7 +5,8 @@ const PALETTE = {
   asteroids: {
     work: '#FF6B35',         // Orange
     about: '#4ECDC4',        // Blue/Teal
-    resume: '#FFE66D'        // Yellow
+    resume: '#FFE66D',       // Yellow
+    neutral: '#888888'       // Gray
   },
   bullet: '#FFFFFF',
   text: '#FFFFFF',
