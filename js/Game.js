@@ -17,6 +17,11 @@ class Game {
     this.fadeAlpha = 0;
     this.fadeDirection = 0;  // 1 = fading out, -1 = fading in
 
+    // Explosion delay before transition
+    this.pendingSection = null;
+    this.transitionDelay = 0;
+    this.transitionDelayFrames = 18;  // ~0.30 seconds at 60fps
+
     // Asteroid management
     this.asteroidTypes = ['work', 'about', 'resume'];
     this.maxAsteroids = 5;
@@ -69,6 +74,16 @@ class Game {
     // Check collisions
     this.checkCollisions();
 
+    // Handle transition delay (show explosion before transitioning)
+    if (this.pendingSection) {
+      this.transitionDelay--;
+      if (this.transitionDelay <= 0) {
+        this.triggerTransition(this.pendingSection);
+        this.pendingSection = null;
+      }
+      return;  // Don't spawn new asteroids while waiting
+    }
+
     // Spawn new asteroids if needed
     this.manageAsteroids();
   }
@@ -86,6 +101,9 @@ class Game {
   }
 
   checkCollisions() {
+    // Don't check collisions if we're waiting to transition
+    if (this.pendingSection) return;
+
     for (let i = this.bullets.length - 1; i >= 0; i--) {
       for (let j = this.asteroids.length - 1; j >= 0; j--) {
         if (this.bullets[i] && this.bullets[i].hits(this.asteroids[j])) {
@@ -100,8 +118,9 @@ class Game {
           this.bullets.splice(i, 1);
           this.asteroids.splice(j, 1);
 
-          // Trigger transition to section
-          this.triggerTransition(sectionType);
+          // Start delay before transition (let explosion play)
+          this.pendingSection = sectionType;
+          this.transitionDelay = this.transitionDelayFrames;
           return;  // Exit after hit
         }
       }
@@ -156,14 +175,14 @@ class Game {
   updateTransition() {
     if (this.fadeDirection === 1) {
       // Fading out
-      this.fadeAlpha += 10;
+      this.fadeAlpha += 15;
       if (this.fadeAlpha >= 255) {
         this.fadeAlpha = 255;
         this.showSection();
       }
     } else if (this.fadeDirection === -1) {
       // Fading in (returning to game)
-      this.fadeAlpha -= 10;
+      this.fadeAlpha -= 15;
       if (this.fadeAlpha <= 0) {
         this.fadeAlpha = 0;
         this.state = GameState.PLAYING;
@@ -252,10 +271,38 @@ class Game {
   }
 
   drawInstructions() {
-    fill(PALETTE.textDim);
+    // Draw legend in bottom left
+    let legendX = 20;
+    let legendY = height - 60;
+    let boxSize = 12;
+    let spacing = 80;
+
+    textAlign(LEFT, CENTER);
+    textSize(12);
+
+    // Work - Orange
+    fill(PALETTE.asteroids.work);
     noStroke();
+    rect(legendX, legendY, boxSize, boxSize);
+    fill(PALETTE.textDim);
+    text('Work', legendX + boxSize + 8, legendY + boxSize / 2);
+
+    // About - Blue
+    fill(PALETTE.asteroids.about);
+    rect(legendX + spacing, legendY, boxSize, boxSize);
+    fill(PALETTE.textDim);
+    text('About', legendX + spacing + boxSize + 8, legendY + boxSize / 2);
+
+    // Resume - Yellow
+    fill(PALETTE.asteroids.resume);
+    rect(legendX + spacing * 2, legendY, boxSize, boxSize);
+    fill(PALETTE.textDim);
+    text('Resume', legendX + spacing * 2 + boxSize + 8, legendY + boxSize / 2);
+
+    // Controls hint centered at bottom
+    fill(PALETTE.textDim);
     textAlign(CENTER, CENTER);
     textSize(14);
-    text('Arrow Keys to Move  |  Space to Shoot  |  Hit an asteroid to explore', width / 2, height - 30);
+    text('Arrow Keys to Move  |  Space to Shoot', width / 2, height - 20);
   }
 }

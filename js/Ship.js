@@ -108,24 +108,23 @@ class Ship {
     // Draw ship body
     fill(PALETTE.background);
     stroke(PALETTE.ship);
-    strokeWeight(2);
+    strokeWeight(1);
 
-    // Triangle ship pointing right (rotation 0 = right)
-    beginShape();
-    vertex(this.size, 0);           // Nose
-    vertex(-this.size, -this.size * 0.6);  // Top rear
-    vertex(-this.size * 0.5, 0);    // Rear indent
-    vertex(-this.size, this.size * 0.6);   // Bottom rear
-    endShape(CLOSE);
+    // Simple triangle ship pointing right (rotation 0 = right)
+    triangle(
+      this.size, 0,
+      -this.size, -this.size * 0.7,
+      -this.size, this.size * 0.7
+    );
 
     // Draw thrust flame when thrusting
     if (this.isThrusting) {
       fill(PALETTE.shipThrust);
       noStroke();
       beginShape();
-      vertex(-this.size * 0.5, -this.size * 0.2);
-      vertex(-this.size * 1.2 - random(5), 0);
-      vertex(-this.size * 0.5, this.size * 0.2);
+      vertex(-this.size, -this.size * 0.25);
+      vertex(-this.size * 1.5 - random(5), 0);
+      vertex(-this.size, this.size * 0.25);
       endShape(CLOSE);
     }
 

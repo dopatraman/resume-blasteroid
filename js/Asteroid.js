@@ -63,7 +63,7 @@ class Asteroid {
     // Draw asteroid shape
     fill(PALETTE.background);
     stroke(this.color);
-    strokeWeight(2);
+    strokeWeight(1);
 
     beginShape();
     for (let v of this.vertices) {
@@ -72,14 +72,6 @@ class Asteroid {
       vertex(x, y);
     }
     endShape(CLOSE);
-
-    // Draw label in center (counter-rotate so text is readable)
-    rotate(-this.rotation);
-    fill(this.color);
-    noStroke();
-    textAlign(CENTER, CENTER);
-    textSize(this.radius * 0.35);
-    text(this.label, 0, 0);
 
     pop();
   }
