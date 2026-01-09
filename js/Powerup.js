@@ -19,6 +19,8 @@ class Powerup {
     switch (this.type) {
       case 'homing':
         return '#FF00FF';  // Magenta
+      case 'chargeshot':
+        return '#00FFFF';  // Cyan
       default:
         return '#FF00FF';
     }
@@ -28,6 +30,8 @@ class Powerup {
     switch (this.type) {
       case 'homing':
         return 'H';
+      case 'chargeshot':
+        return 'C';
       default:
         return '?';
     }

@@ -51,7 +51,8 @@ class Game {
     this.powerups = [];           // Floating powerup entities
     this.powerupDrops = [];       // Collectibles after shooting
     this.activePowerups = {       // Currently held powerups
-      homing: false
+      homing: false,
+      chargeshot: false
     };
     this.powerupSpawnTimer = 0;
     this.powerupSpawnInterval = 600;  // 10 seconds at 60fps
@@ -220,6 +221,7 @@ class Game {
 
     // Reset all powerups on death
     this.activePowerups.homing = false;
+    this.activePowerups.chargeshot = false;
   }
 
   updateDeath() {
@@ -396,6 +398,9 @@ class Game {
       case 'homing':
         this.activePowerups.homing = true;
         break;
+      case 'chargeshot':
+        this.activePowerups.chargeshot = true;
+        break;
     }
   }
 
@@ -404,8 +409,10 @@ class Game {
 
     // Spawn powerup periodically
     if (this.powerupSpawnTimer >= this.powerupSpawnInterval && this.powerups.length < 2) {
-      // Only spawn homing for now
-      this.powerups.push(Powerup.spawnFromEdge('homing'));
+      // Randomly spawn homing or chargeshot
+      let types = ['homing', 'chargeshot'];
+      let type = random(types);
+      this.powerups.push(Powerup.spawnFromEdge(type));
       this.powerupSpawnTimer = 0;
     }
   }
@@ -482,6 +489,12 @@ class Game {
 
   startCharging() {
     if (this.state === GameState.PLAYING && this.ship) {
+      // If no chargeshot powerup, fire normal bullet immediately
+      if (!this.activePowerups.chargeshot) {
+        this.bullets.push(this.ship.fire());
+        return;
+      }
+      // Otherwise, start charging
       this.spaceHeld = true;
       this.spaceHoldTime = 0;
     }
@@ -491,6 +504,11 @@ class Game {
     if (this.state !== GameState.PLAYING || !this.ship) {
       this.spaceHeld = false;
       this.isCharging = false;
+      return;
+    }
+
+    // If no chargeshot powerup, do nothing (already fired on press)
+    if (!this.activePowerups.chargeshot) {
       return;
     }
 
@@ -846,14 +864,19 @@ class Game {
     textAlign(RIGHT, TOP);
     textSize(11);
 
+    if (this.activePowerups.chargeshot) {
+      let c = color('#00FFFF');
+      fill(red(c), green(c), blue(c), 200);
+      text('Charge', width - 20, yOffset);
+      yOffset += 18;
+    }
+
     if (this.activePowerups.homing) {
       let c = color('#FF00FF');
       fill(red(c), green(c), blue(c), 200);
       text('Homing', width - 20, yOffset);
       yOffset += 18;
     }
-
-    // If no powerups active, show nothing (or could show "No powerups")
   }
 
   drawInstructions() {

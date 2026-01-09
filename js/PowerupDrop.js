@@ -18,6 +18,8 @@ class PowerupDrop {
     switch (this.type) {
       case 'homing':
         return '#FF00FF';  // Magenta
+      case 'chargeshot':
+        return '#00FFFF';  // Cyan
       default:
         return '#FF00FF';
     }
@@ -27,6 +29,8 @@ class PowerupDrop {
     switch (this.type) {
       case 'homing':
         return 'Homing';
+      case 'chargeshot':
+        return 'Charge';
       default:
         return '???';
     }
