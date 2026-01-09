@@ -62,6 +62,13 @@ class Game {
 
     // Pending bullets for sequential spawn (ChargeShot II)
     this.pendingBullets = [];
+
+    // Screen flash for tier 3 charging
+    this.screenFlash = 0;
+
+    // Beams for ChargeShot III
+    this.beams = [];
+    this.beamParticles = [];
   }
 
   init() {
@@ -121,8 +128,15 @@ class Game {
     // Update pending bullets (sequential spawn for ChargeShot II)
     this.updatePendingBullets();
 
+    // Update beams (ChargeShot III)
+    this.updateBeams();
+    this.updateBeamParticles();
+
     // Check bullet-asteroid collisions
     this.checkCollisions();
+
+    // Check beam-asteroid collisions (ChargeShot III)
+    this.checkBeamCollisions();
 
     // Check ship-asteroid collisions
     this.checkShipCollisions();
@@ -181,6 +195,63 @@ class Game {
         }
       }
     }
+  }
+
+  checkBeamCollisions() {
+    for (let beam of this.beams) {
+      let endPos = p5.Vector.add(beam.startPos, p5.Vector.mult(beam.direction, beam.currentLength));
+
+      for (let j = this.asteroids.length - 1; j >= 0; j--) {
+        let asteroid = this.asteroids[j];
+
+        // Check line-circle collision
+        if (this.lineCircleCollision(beam.startPos, endPos, asteroid.pos, asteroid.radius + beam.width / 2)) {
+          // Create explosion particles
+          let explosionParticles = asteroid.explode();
+          this.particles.push(...explosionParticles);
+
+          // Get asteroid type and position before removing
+          let asteroidType = asteroid.type;
+          let asteroidPos = asteroid.pos;
+
+          // Award points
+          this.score += 10;
+
+          // Remove asteroid (beam doesn't get consumed)
+          this.asteroids.splice(j, 1);
+
+          // Spawn portal for section asteroids (not neutral)
+          if (asteroidType !== 'neutral') {
+            this.spawnPortal(asteroidPos, asteroidType);
+          }
+        }
+      }
+    }
+  }
+
+  lineCircleCollision(lineStart, lineEnd, circleCenter, circleRadius) {
+    // Vector from line start to end
+    let lineVec = p5.Vector.sub(lineEnd, lineStart);
+    // Vector from line start to circle center
+    let toCircle = p5.Vector.sub(circleCenter, lineStart);
+
+    // Project circle center onto line
+    let lineLenSquared = lineVec.magSq();
+    if (lineLenSquared === 0) {
+      // Line is a point
+      return p5.Vector.dist(lineStart, circleCenter) < circleRadius;
+    }
+
+    // Parameter t for closest point on line segment
+    let t = max(0, min(1, p5.Vector.dot(toCircle, lineVec) / lineLenSquared));
+
+    // Closest point on line segment
+    let closest = p5.Vector.add(lineStart, p5.Vector.mult(lineVec, t));
+
+    // Distance from circle center to closest point
+    let distance = p5.Vector.dist(closest, circleCenter);
+
+    return distance < circleRadius;
   }
 
   checkShipCollisions() {
@@ -532,8 +603,11 @@ class Game {
     let tier = this.activePowerups.chargeshot;
 
     if (this.isCharging) {
-      if (tier >= 2) {
-        // Tier 2+: Fire first bullet immediately, queue rest
+      if (tier >= 3) {
+        // Tier 3: Fire beam instead of bullets
+        this.fireBeam();
+      } else if (tier >= 2) {
+        // Tier 2: Fire first bullet immediately, queue rest
         let firstBullet = this.ship.fireCharged(this.chargeLevel, this.maxChargeLevel, tier);
         this.bullets.push(firstBullet);
 
@@ -599,10 +673,10 @@ class Game {
 
     // Tier-based spawn parameters
     let baseSpawnRate = 1 + floor(chargePercent * 3);  // 1-4 particles per frame
-    let spawnRate = tier >= 2 ? baseSpawnRate + 2 : baseSpawnRate;  // +2 at tier 2
-    let minDistance = tier >= 2 ? 100 : 80;
-    let maxDistance = tier >= 2 ? 150 : 120;
-    let particleSize = tier >= 2 ? random(2.5, 5) : random(2, 4);
+    let spawnRate = tier >= 3 ? baseSpawnRate + 3 : (tier >= 2 ? baseSpawnRate + 2 : baseSpawnRate);
+    let minDistance = tier >= 3 ? 110 : (tier >= 2 ? 100 : 80);
+    let maxDistance = tier >= 3 ? 160 : (tier >= 2 ? 150 : 120);
+    let particleSize = tier >= 3 ? random(3, 5.5) : (tier >= 2 ? random(2.5, 5) : random(2, 4));
 
     for (let i = 0; i < spawnRate; i++) {
       // Spawn in a ring around the ship
@@ -618,8 +692,17 @@ class Game {
       let speed = 3 + chargePercent * 4;  // Faster as charge increases
       toNose.setMag(speed);
 
-      // At tier 2+, some particles are cyan
-      let isCyan = tier >= 2 && random() < 0.4;
+      // Particle color based on tier
+      let isCyan = false;
+      let isMagenta = false;
+      if (tier >= 3) {
+        // Tier 3: ~30% magenta, ~30% cyan, ~40% white
+        let colorRoll = random();
+        if (colorRoll < 0.3) isMagenta = true;
+        else if (colorRoll < 0.6) isCyan = true;
+      } else if (tier >= 2) {
+        isCyan = random() < 0.4;
+      }
 
       this.chargeParticles.push({
         pos: spawnPos,
@@ -628,7 +711,8 @@ class Game {
         life: 30,
         maxLife: 30,
         size: particleSize,
-        isCyan: isCyan
+        isCyan: isCyan,
+        isMagenta: isMagenta
       });
     }
 
@@ -655,6 +739,13 @@ class Game {
       if (p.life <= 0) {
         this.chargeParticles.splice(i, 1);
       }
+    }
+
+    // Tier 3 screen flash effect
+    if (tier >= 3) {
+      this.screenFlash = sin(frameCount * 0.3) * 20 * chargePercent;
+    } else {
+      this.screenFlash = 0;
     }
   }
 
@@ -688,6 +779,259 @@ class Game {
         this.bullets.push(bullet);
         this.pendingBullets.splice(i, 1);
       }
+    }
+  }
+
+  fireBeam() {
+    let nosePos = this.ship.getNosePosition();
+    let direction = p5.Vector.fromAngle(this.ship.rotation);
+    let chargePercent = this.chargeLevel / this.maxChargeLevel;
+
+    // Beam properties scale with charge level
+    let maxLength = 400 + chargePercent * 1100;  // 400-1500
+    let beamWidth = 30 + chargePercent * 50;     // 30-80
+    let beamLife = 25 + chargePercent * 20;      // 25-45
+
+    this.beams.push({
+      startPos: nosePos.copy(),
+      direction: direction.copy(),
+      currentLength: 0,
+      maxLength: maxLength,
+      extendSpeed: 50,
+      width: beamWidth,
+      life: beamLife,
+      maxLife: beamLife,
+      extending: true,
+      chargePercent: chargePercent  // Store for particle/helix logic
+    });
+
+    // Muzzle flash and fire ring
+    this.ship.emitTier3MuzzleFlash(nosePos, chargePercent);
+    this.spawnFireRing(nosePos);
+  }
+
+  updateBeams() {
+    for (let i = this.beams.length - 1; i >= 0; i--) {
+      let beam = this.beams[i];
+
+      // Extend beam until max length
+      if (beam.extending) {
+        beam.currentLength += beam.extendSpeed;
+        if (beam.currentLength >= beam.maxLength) {
+          beam.currentLength = beam.maxLength;
+          beam.extending = false;
+        }
+      }
+
+      // Spawn particles along beam length - count scales with charge
+      if (beam.currentLength > 10) {
+        let endPos = p5.Vector.add(beam.startPos, p5.Vector.mult(beam.direction, beam.currentLength));
+        let particleCount = floor(2 + beam.chargePercent * 6);  // 2-8 particles
+
+        for (let j = 0; j < particleCount; j++) {
+          let t = random();  // Random position along beam (0-1)
+          let pos = p5.Vector.lerp(beam.startPos, endPos, t);
+
+          // Perpendicular offset for particle spawn
+          let perpAngle = atan2(beam.direction.y, beam.direction.x) + HALF_PI;
+          let offset = random(-beam.width * 0.5, beam.width * 0.5);
+          pos.x += cos(perpAngle) * offset;
+          pos.y += sin(perpAngle) * offset;
+
+          // Velocity perpendicular to beam (outward drift)
+          let vel = p5.Vector.fromAngle(perpAngle + random(-0.5, 0.5));
+          vel.mult(random(1.5, 4));
+
+          // Determine color type - include green
+          let colorTypes = ['magenta', 'magenta', 'green', 'green', 'cyan', 'cyan', 'white', 'white'];
+          let colorType = random(colorTypes);
+
+          this.beamParticles.push({
+            pos: pos,
+            vel: vel,
+            life: random(15, 30),
+            maxLife: 30,
+            size: random(3, 7),
+            colorType: colorType
+          });
+        }
+
+        // Spawn particles along helix paths - only at full charge
+        if (beam.chargePercent >= 0.95) {
+          let helixRadius = beam.width * 0.6;
+          let helixFrequency = 0.08;
+          let helixRotation = frameCount * 0.15;
+
+          for (let k = 0; k < 2; k++) {
+            let phaseOffset = k * PI;
+            let t = random();
+            let dist = t * beam.currentLength;
+
+            // Base position along beam
+            let baseX = beam.startPos.x + beam.direction.x * dist;
+            let baseY = beam.startPos.y + beam.direction.y * dist;
+
+            // Perpendicular angle and helix position
+            let perpAngle = atan2(beam.direction.y, beam.direction.x) + HALF_PI;
+            let helixAngle = dist * helixFrequency + helixRotation + phaseOffset;
+
+            // Position on helix
+            let offsetMag = sin(helixAngle) * helixRadius;
+            let helixPos = createVector(
+              baseX + cos(perpAngle) * offsetMag,
+              baseY + sin(perpAngle) * offsetMag
+            );
+
+            // Velocity outward from helix
+            let outwardAngle = perpAngle + (offsetMag > 0 ? 0 : PI);
+            let vel = p5.Vector.fromAngle(outwardAngle + random(-0.3, 0.3));
+            vel.mult(random(2, 5));
+
+            // Helix particles are cyan or magenta based on which helix
+            let colorType = k === 0 ? 'cyan' : 'magenta';
+
+            this.beamParticles.push({
+              pos: helixPos,
+              vel: vel,
+              life: random(15, 25),
+              maxLife: 25,
+              size: random(2, 5),
+              colorType: colorType
+            });
+          }
+        }
+      }
+
+      beam.life--;
+      if (beam.life <= 0) {
+        this.beams.splice(i, 1);
+      }
+    }
+  }
+
+  renderBeams() {
+    for (let beam of this.beams) {
+      let alpha = map(beam.life, 0, beam.maxLife, 0, 255);
+      let endPos = p5.Vector.add(beam.startPos, p5.Vector.mult(beam.direction, beam.currentLength));
+
+      // Intense shimmer effect - faster oscillation, bigger range
+      let shimmer1 = 0.8 + sin(frameCount * 0.6) * 0.2;
+      let shimmer2 = 0.8 + sin(frameCount * 0.6 + PI * 0.33) * 0.2;
+      let shimmer3 = 0.8 + sin(frameCount * 0.6 + PI * 0.66) * 0.2;
+      let shimmer4 = 0.8 + sin(frameCount * 0.6 + PI) * 0.2;
+
+      push();
+      strokeCap(ROUND);
+
+      // Outer layer - magenta glow
+      stroke(255, 0, 255, alpha * 0.4 * shimmer1);
+      strokeWeight(beam.width);
+      line(beam.startPos.x, beam.startPos.y, endPos.x, endPos.y);
+
+      // Green layer (outer)
+      stroke(0, 255, 100, alpha * 0.5 * shimmer2);
+      strokeWeight(beam.width * 0.75);
+      line(beam.startPos.x, beam.startPos.y, endPos.x, endPos.y);
+
+      // Cyan layer
+      stroke(0, 255, 255, alpha * 0.7 * shimmer3);
+      strokeWeight(beam.width * 0.55);
+      line(beam.startPos.x, beam.startPos.y, endPos.x, endPos.y);
+
+      // Green layer (inner) - more green!
+      stroke(0, 255, 100, alpha * 0.8 * shimmer4);
+      strokeWeight(beam.width * 0.4);
+      line(beam.startPos.x, beam.startPos.y, endPos.x, endPos.y);
+
+      // White core
+      stroke(255, 255, 255, alpha);
+      strokeWeight(beam.width * 0.2);
+      line(beam.startPos.x, beam.startPos.y, endPos.x, endPos.y);
+
+      // Draw helix spirals around beam - only at full charge
+      if (beam.chargePercent >= 0.95) {
+        let helixRadius = beam.width * 0.6;
+        let helixFrequency = 0.08;
+        let helixRotation = frameCount * 0.15;
+        let numPoints = floor(beam.currentLength / 8);
+
+        if (numPoints > 2) {
+          for (let k = 0; k < 2; k++) {
+            let phaseOffset = k * PI;
+            let helixColor = k === 0 ? [0, 255, 255] : [255, 0, 255];  // Cyan and magenta helixes
+
+            beginShape();
+            noFill();
+            stroke(helixColor[0], helixColor[1], helixColor[2], alpha * 0.8 * shimmer1);
+            strokeWeight(3);
+
+            for (let i = 0; i <= numPoints; i++) {
+              let t = i / numPoints;
+              let dist = t * beam.currentLength;
+
+              // Base position along beam
+              let baseX = beam.startPos.x + beam.direction.x * dist;
+              let baseY = beam.startPos.y + beam.direction.y * dist;
+
+              // Perpendicular angle to beam direction
+              let perpAngle = atan2(beam.direction.y, beam.direction.x) + HALF_PI;
+              let helixAngle = dist * helixFrequency + helixRotation + phaseOffset;
+
+              // Helix offset (sine wave in perpendicular direction)
+              let offsetMag = sin(helixAngle) * helixRadius;
+              let offsetX = cos(perpAngle) * offsetMag;
+              let offsetY = sin(perpAngle) * offsetMag;
+
+              vertex(baseX + offsetX, baseY + offsetY);
+            }
+            endShape();
+          }
+        }
+      }
+      pop();
+    }
+  }
+
+  updateBeamParticles() {
+    for (let i = this.beamParticles.length - 1; i >= 0; i--) {
+      let p = this.beamParticles[i];
+      p.pos.add(p.vel);
+      p.vel.mult(0.95);  // Slow down
+      p.life--;
+      if (p.life <= 0) {
+        this.beamParticles.splice(i, 1);
+      }
+    }
+  }
+
+  renderBeamParticles() {
+    for (let p of this.beamParticles) {
+      let alpha = map(p.life, 0, p.maxLife, 0, 255);
+      noStroke();
+
+      // Color based on type
+      let r, g, b;
+      if (p.colorType === 'magenta') {
+        r = 255; g = 0; b = 255;
+      } else if (p.colorType === 'green') {
+        r = 0; g = 255; b = 100;  // Neon green from ChargeShot I
+      } else if (p.colorType === 'cyan') {
+        r = 0; g = 255; b = 255;
+      } else {
+        r = 255; g = 255; b = 255;
+      }
+
+      // Outer glow
+      fill(r, g, b, alpha * 0.3);
+      ellipse(p.pos.x, p.pos.y, p.size * 3, p.size * 3);
+
+      // Core
+      fill(r, g, b, alpha);
+      ellipse(p.pos.x, p.pos.y, p.size, p.size);
+
+      // White center
+      fill(255, 255, 255, alpha * 0.5);
+      ellipse(p.pos.x, p.pos.y, p.size * 0.4, p.size * 0.4);
     }
   }
 
@@ -753,6 +1097,10 @@ class Game {
       bullet.render();
     }
 
+    // Draw beams (ChargeShot III)
+    this.renderBeams();
+    this.renderBeamParticles();
+
     // Draw fire rings
     this.renderFireRings();
 
@@ -763,6 +1111,13 @@ class Game {
 
     // Draw charging effect
     this.renderCharging();
+
+    // Screen flash for tier 3 charging
+    if (this.screenFlash > 0) {
+      fill(255, 255, 255, this.screenFlash);
+      noStroke();
+      rect(0, 0, width, height);
+    }
 
     // Draw death effects
     this.renderDeathEffects();
@@ -792,18 +1147,24 @@ class Game {
     let nosePos = this.ship.getNosePosition();
     let tier = this.activePowerups.chargeshot;
 
-    // Cyan accent color for tier 2+
+    // Accent colors
     let cyanR = 0, cyanG = 255, cyanB = 255;
+    let magentaR = 255, magentaG = 0, magentaB = 255;
 
     // Draw energy particles flowing inward
     for (let p of this.chargeParticles) {
       let alpha = map(p.life, 0, p.maxLife, 50, 255);
       noStroke();
 
-      // Use cyan color for marked particles at tier 2+
-      let pr = p.isCyan ? cyanR : r;
-      let pg = p.isCyan ? cyanG : g;
-      let pb = p.isCyan ? cyanB : b;
+      // Determine particle color
+      let pr, pg, pb;
+      if (p.isMagenta) {
+        pr = magentaR; pg = magentaG; pb = magentaB;
+      } else if (p.isCyan) {
+        pr = cyanR; pg = cyanG; pb = cyanB;
+      } else {
+        pr = r; pg = g; pb = b;
+      }
 
       // Outer glow
       fill(pr, pg, pb, alpha * 0.3);
@@ -820,9 +1181,27 @@ class Game {
 
     // Draw growing orb at ship nose
     let baseSize = 5;
-    let maxGrowth = tier >= 2 ? 28 : 20;  // Larger at tier 2
+    let maxGrowth = tier >= 3 ? 32 : (tier >= 2 ? 28 : 20);
     let orbSize = baseSize + chargePercent * maxGrowth;
     let pulse = sin(frameCount * 0.2) * 0.2 + 1;  // Pulsing effect
+
+    // Tier 3 magenta accent rings (outermost)
+    if (tier >= 3) {
+      let magentaPulse = sin(frameCount * 0.12) * 0.35 + 1;
+      let magentaPulse2 = sin(frameCount * 0.12 + PI * 0.5) * 0.35 + 1;
+      let magentaAlpha = 70 + chargePercent * 100;
+
+      noFill();
+      // Outer magenta ring
+      stroke(magentaR, magentaG, magentaB, magentaAlpha * 0.4);
+      strokeWeight(2.5);
+      ellipse(nosePos.x, nosePos.y, orbSize * 6.5 * magentaPulse, orbSize * 6.5 * magentaPulse);
+
+      // Inner magenta ring
+      stroke(magentaR, magentaG, magentaB, magentaAlpha * 0.6);
+      strokeWeight(1.5);
+      ellipse(nosePos.x, nosePos.y, orbSize * 4.5 * magentaPulse2, orbSize * 4.5 * magentaPulse2);
+    }
 
     // Tier 2+ cyan accent rings (pulsing outward)
     if (tier >= 2) {
@@ -850,6 +1229,12 @@ class Game {
     // Middle glow
     fill(r, g, b, 100 + chargePercent * 100);
     ellipse(nosePos.x, nosePos.y, orbSize * 2.5 * pulse, orbSize * 2.5 * pulse);
+
+    // Tier 3 magenta tint layer
+    if (tier >= 3) {
+      fill(magentaR, magentaG, magentaB, 20 + chargePercent * 30);
+      ellipse(nosePos.x, nosePos.y, orbSize * 2.2 * pulse, orbSize * 2.2 * pulse);
+    }
 
     // Tier 2+ cyan tint in middle layer
     if (tier >= 2) {

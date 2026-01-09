@@ -182,6 +182,34 @@ class Ship {
     }
   }
 
+  emitTier3MuzzleFlash(nosePos, chargePercent) {
+    // More particles than tier 2 (2x), with magenta and cyan
+    let numParticles = floor((10 + floor(chargePercent * 20)) * 2);
+    for (let i = 0; i < numParticles; i++) {
+      let angle = this.rotation + random(-0.7, 0.7);
+      let speed = random(4, 10) * (0.8 + chargePercent * 0.5);
+      let size = random(4, 10) * (1 + chargePercent);
+      // ~30% magenta, ~30% cyan, ~40% white
+      let colorRoll = random();
+      let isCyan = false;
+      let isMagenta = false;
+      if (colorRoll < 0.3) {
+        isMagenta = true;
+      } else if (colorRoll < 0.6) {
+        isCyan = true;
+      }
+      this.muzzleParticles.push({
+        pos: nosePos.copy(),
+        vel: p5.Vector.fromAngle(angle).mult(speed),
+        life: random(15, 30),
+        maxLife: 30,
+        size: size,
+        isCyan: isCyan,
+        isMagenta: isMagenta
+      });
+    }
+  }
+
   render() {
     // Draw thrust particles first (behind ship)
     for (let p of this.thrustParticles) {
@@ -197,8 +225,13 @@ class Ship {
       let alpha = map(p.life, 0, p.maxLife, 0, 255);
       noStroke();
 
-      if (p.isCyan) {
-        // Cyan particle (for tier 2)
+      if (p.isMagenta) {
+        // Magenta particle (for tier 3)
+        fill(255, 0, 255, alpha * 0.3);
+        ellipse(p.pos.x, p.pos.y, p.size * 3, p.size * 3);
+        fill(255, 0, 255, alpha);
+      } else if (p.isCyan) {
+        // Cyan particle (for tier 2+)
         fill(0, 255, 255, alpha * 0.3);
         ellipse(p.pos.x, p.pos.y, p.size * 3, p.size * 3);
         fill(0, 255, 255, alpha);
