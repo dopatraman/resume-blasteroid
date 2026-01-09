@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Resume-Blastroid Tests</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Courier New', monospace;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+
+    .container {
+      display: flex;
+      height: 100vh;
+    }
+
+    .canvas-panel {
+      flex: 1;
+      padding: 20px;
+      border-right: 1px solid #333;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .canvas-panel h2 {
+      color: #ADFF2F;
+      margin-bottom: 15px;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    #test-canvas-container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #111;
+      border-radius: 4px;
+    }
+
+    #test-canvas-container canvas {
+      border-radius: 4px;
+    }
+
+    .reporter-panel {
+      width: 400px;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .reporter-panel h2 {
+      color: #ADFF2F;
+      margin-bottom: 20px;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .suite {
+      margin-bottom: 25px;
+    }
+
+    .suite-name {
+      color: #4ECDC4;
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 10px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid #333;
+    }
+
+    .test {
+      padding: 8px 0;
+      padding-left: 20px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .test.passed {
+      color: #4CAF50;
+    }
+
+    .test.failed {
+      color: #f44336;
+    }
+
+    .test.running {
+      color: #FFE66D;
+    }
+
+    .test.pending {
+      color: #666;
+    }
+
+    .test-icon {
+      font-size: 14px;
+    }
+
+    .test.passed .test-icon::before { content: '\2713'; }
+    .test.failed .test-icon::before { content: '\2717'; }
+    .test.running .test-icon::before { content: '\25CB'; }
+    .test.pending .test-icon::before { content: '\25CB'; }
+
+    .error-message {
+      color: #f44336;
+      font-size: 11px;
+      margin-top: 5px;
+      padding-left: 25px;
+      font-style: italic;
+    }
+
+    .summary {
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 2px solid #333;
+    }
+
+    .summary-title {
+      font-size: 14px;
+      color: #ADFF2F;
+      margin-bottom: 10px;
+    }
+
+    .summary-stats {
+      display: flex;
+      gap: 20px;
+      font-size: 13px;
+    }
+
+    .stat {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .stat.passed { color: #4CAF50; }
+    .stat.failed { color: #f44336; }
+    .stat.total { color: #888; }
+
+    .progress-bar {
+      margin-top: 15px;
+      height: 4px;
+      background: #333;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: #4CAF50;
+      transition: width 0.3s ease;
+    }
+
+    .progress-fill.has-failures {
+      background: linear-gradient(90deg, #4CAF50 var(--pass-percent), #f44336 var(--pass-percent));
+    }
+
+    .status-banner {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 4px;
+      text-align: center;
+      font-weight: bold;
+    }
+
+    .status-banner.running {
+      background: #333;
+      color: #FFE66D;
+    }
+
+    .status-banner.passed {
+      background: #1b3a1b;
+      color: #4CAF50;
+    }
+
+    .status-banner.failed {
+      background: #3a1b1b;
+      color: #f44336;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="canvas-panel">
+      <h2>Test Canvas</h2>
+      <div id="test-canvas-container"></div>
+    </div>
+    <div class="reporter-panel">
+      <h2>Test Reporter</h2>
+      <div id="test-results"></div>
+      <div class="summary" id="summary" style="display: none;">
+        <div class="summary-title">Results</div>
+        <div class="summary-stats">
+          <div class="stat passed"><span id="passed-count">0</span> passed</div>
+          <div class="stat failed"><span id="failed-count">0</span> failed</div>
+          <div class="stat total"><span id="total-count">0</span> total</div>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <div class="status-banner running" id="status-banner">Running tests...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Expose p5.js globals before loading game code -->
+  <script>
+    // Create a temporary p5 instance to extract global functions
+    // This makes createVector, PI, etc. available globally
+    new p5((p) => {
+      // Expose common p5 functions globally
+      window.createVector = (x, y, z) => p.createVector(x, y, z);
+      window.dist = (x1, y1, x2, y2) => p.dist(x1, y1, x2, y2);
+      window.random = (a, b) => {
+        if (Array.isArray(a)) return a[Math.floor(Math.random() * a.length)];
+        if (b === undefined) return p.random(a);
+        return p.random(a, b);
+      };
+      window.floor = (n) => Math.floor(n);
+      window.map = (v, s1, e1, s2, e2) => p.map(v, s1, e1, s2, e2);
+      window.sin = (a) => Math.sin(a);
+      window.cos = (a) => Math.cos(a);
+      window.atan2 = (y, x) => Math.atan2(y, x);
+
+      // Expose p5 constants
+      window.PI = Math.PI;
+      window.TWO_PI = Math.PI * 2;
+      window.HALF_PI = Math.PI / 2;
+
+      // Expose drawing constants
+      window.ROUND = 'round';
+      window.CLOSE = p.CLOSE;
+      window.CENTER = p.CENTER;
+      window.LEFT = p.LEFT;
+      window.RIGHT = p.RIGHT;
+      window.TOP = p.TOP;
+      window.BOLD = p.BOLD;
+      window.NORMAL = p.NORMAL;
+
+      // Color functions that work without active canvas
+      window.color = (r, g, b, a) => p.color(r, g, b, a);
+      window.red = (c) => p.red(c);
+      window.green = (c) => p.green(c);
+      window.blue = (c) => p.blue(c);
+
+      // Dummy canvas dimensions (will be set properly later)
+      window.width = 600;
+      window.height = 400;
+      window.frameCount = 0;
+
+      // Stop this instance immediately
+      p.noLoop();
+      p.remove();
+    });
+  </script>
+
+  <!-- Load game dependencies -->
+  <script src="/js/Palette.js"></script>
+  <script src="/js/Shapes.js"></script>
+  <script src="/js/Ship.js"></script>
+  <script src="/js/Bullet.js"></script>
+  <script src="/js/Asteroid.js"></script>
+  <script src="/js/Powerup.js"></script>
+  <script src="/js/PowerupDrop.js"></script>
+
+  <!-- Load test framework -->
+  <script src="/tests/TestRunner.js"></script>
+
+  <!-- Load test files -->
+  <script src="/tests/ship.test.js"></script>
+  <script src="/tests/collision.test.js"></script>
+
+  <!-- Initialize and run tests -->
+  <script>
+    // p5.js sketch for test visualization
+    let testSketch = function(p) {
+      p.setup = function() {
+        let container = document.getElementById('test-canvas-container');
+        let canvas = p.createCanvas(600, 400);
+        canvas.parent(container);
+        p.background(10);
+
+        // Make p5 instance available globally for tests
+        window.p5Instance = p;
+
+        // Now expose drawing functions that delegate to this p5 instance
+        window.fill = (...args) => p.fill(...args);
+        window.stroke = (...args) => p.stroke(...args);
+        window.noFill = () => p.noFill();
+        window.noStroke = () => p.noStroke();
+        window.strokeWeight = (w) => p.strokeWeight(w);
+        window.ellipse = (...args) => p.ellipse(...args);
+        window.rect = (...args) => p.rect(...args);
+        window.line = (...args) => p.line(...args);
+        window.triangle = (...args) => p.triangle(...args);
+        window.beginShape = (...args) => p.beginShape(...args);
+        window.endShape = (...args) => p.endShape(...args);
+        window.vertex = (...args) => p.vertex(...args);
+        window.push = () => p.push();
+        window.pop = () => p.pop();
+        window.translate = (...args) => p.translate(...args);
+        window.rotate = (a) => p.rotate(a);
+        window.text = (...args) => p.text(...args);
+        window.textSize = (s) => p.textSize(s);
+        window.textAlign = (...args) => p.textAlign(...args);
+        window.textStyle = (s) => p.textStyle(s);
+        window.strokeCap = (c) => p.strokeCap(c);
+        window.background = (...args) => p.background(...args);
+
+        // Update dimensions
+        window.width = 600;
+        window.height = 400;
+
+        // Run tests after setup
+        setTimeout(() => {
+          TestRunner.run();
+        }, 100);
+      };
+
+      p.draw = function() {
+        // Tests control rendering
+      };
+    };
+
+    // Create p5 instance
+    new p5(testSketch);
+  </script>
+</body>
+</html>
