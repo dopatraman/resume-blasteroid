@@ -162,6 +162,26 @@ class Ship {
     }
   }
 
+  emitTier2MuzzleFlash(nosePos, chargePercent) {
+    // More particles than tier 1 (1.5x), some cyan
+    let numParticles = floor((10 + floor(chargePercent * 20)) * 1.5);
+    for (let i = 0; i < numParticles; i++) {
+      let angle = this.rotation + random(-0.6, 0.6);
+      let speed = random(3, 8) * (0.8 + chargePercent * 0.5);
+      let size = random(3, 8) * (1 + chargePercent);
+      // 40% chance of cyan particle
+      let isCyan = random() < 0.4;
+      this.muzzleParticles.push({
+        pos: nosePos.copy(),
+        vel: p5.Vector.fromAngle(angle).mult(speed),
+        life: random(12, 25),
+        maxLife: 25,
+        size: size,
+        isCyan: isCyan
+      });
+    }
+  }
+
   render() {
     // Draw thrust particles first (behind ship)
     for (let p of this.thrustParticles) {
@@ -177,12 +197,17 @@ class Ship {
       let alpha = map(p.life, 0, p.maxLife, 0, 255);
       noStroke();
 
-      // Outer glow (white/yellow)
-      fill(255, 255, 200, alpha * 0.3);
-      ellipse(p.pos.x, p.pos.y, p.size * 3, p.size * 3);
-
-      // Core (bright white)
-      fill(255, 255, 255, alpha);
+      if (p.isCyan) {
+        // Cyan particle (for tier 2)
+        fill(0, 255, 255, alpha * 0.3);
+        ellipse(p.pos.x, p.pos.y, p.size * 3, p.size * 3);
+        fill(0, 255, 255, alpha);
+      } else {
+        // Normal white/yellow particle
+        fill(255, 255, 200, alpha * 0.3);
+        ellipse(p.pos.x, p.pos.y, p.size * 3, p.size * 3);
+        fill(255, 255, 255, alpha);
+      }
       ellipse(p.pos.x, p.pos.y, p.size, p.size);
     }
 

@@ -59,6 +59,9 @@ class Game {
 
     // Fire rings (expanding ring on tier 2+ charge shot)
     this.fireRings = [];
+
+    // Pending bullets for sequential spawn (ChargeShot II)
+    this.pendingBullets = [];
   }
 
   init() {
@@ -114,6 +117,9 @@ class Game {
 
     // Update fire rings
     this.updateFireRings();
+
+    // Update pending bullets (sequential spawn for ChargeShot II)
+    this.updatePendingBullets();
 
     // Check bullet-asteroid collisions
     this.checkCollisions();
@@ -228,6 +234,9 @@ class Game {
     // Reset all powerups on death
     this.activePowerups.homing = false;
     this.activePowerups.chargeshot = 0;
+
+    // Clear pending bullets
+    this.pendingBullets = [];
   }
 
   updateDeath() {
@@ -523,13 +532,32 @@ class Game {
     let tier = this.activePowerups.chargeshot;
 
     if (this.isCharging) {
-      // Fire charged shot with tier
-      let bullet = this.ship.fireCharged(this.chargeLevel, this.maxChargeLevel, tier);
-      this.bullets.push(bullet);
-
-      // Spawn fire ring at nose for tier 2+
       if (tier >= 2) {
+        // Tier 2+: Fire first bullet immediately, queue rest
+        let firstBullet = this.ship.fireCharged(this.chargeLevel, this.maxChargeLevel, tier);
+        this.bullets.push(firstBullet);
+
+        // Queue remaining bullets with delay based on spacing/speed
+        let bulletSpeed = firstBullet.vel.mag();
+        let spacing = 40;
+        let frameDelay = spacing / bulletSpeed;
+
+        for (let i = 1; i < 3; i++) {
+          this.pendingBullets.push({
+            delay: frameDelay * i,
+            chargeLevel: this.chargeLevel,
+            maxChargeLevel: this.maxChargeLevel,
+            tier: tier
+          });
+        }
+
+        // Muzzle flash and fire ring
+        this.ship.emitTier2MuzzleFlash(this.ship.getNosePosition(), this.chargeLevel / this.maxChargeLevel);
         this.spawnFireRing(this.ship.getNosePosition());
+      } else {
+        // Tier 1: single bullet
+        let bullet = this.ship.fireCharged(this.chargeLevel, this.maxChargeLevel, tier);
+        this.bullets.push(bullet);
       }
     } else if (this.spaceHeld) {
       // Quick tap - fire normal bullet
@@ -647,6 +675,18 @@ class Game {
       ring.alpha = map(ring.radius, 5, ring.maxRadius, 200, 0);
       if (ring.radius >= ring.maxRadius) {
         this.fireRings.splice(i, 1);
+      }
+    }
+  }
+
+  updatePendingBullets() {
+    for (let i = this.pendingBullets.length - 1; i >= 0; i--) {
+      this.pendingBullets[i].delay--;
+      if (this.pendingBullets[i].delay <= 0 && this.ship) {
+        let pb = this.pendingBullets[i];
+        let bullet = this.ship.fireCharged(pb.chargeLevel, pb.maxChargeLevel, pb.tier);
+        this.bullets.push(bullet);
+        this.pendingBullets.splice(i, 1);
       }
     }
   }
