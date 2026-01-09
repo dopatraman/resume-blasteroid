@@ -52,10 +52,13 @@ class Game {
     this.powerupDrops = [];       // Collectibles after shooting
     this.activePowerups = {       // Currently held powerups
       homing: false,
-      chargeshot: false
+      chargeshot: 0         // 0 = none, 1-3 = tier level
     };
     this.powerupSpawnTimer = 0;
     this.powerupSpawnInterval = 600;  // 10 seconds at 60fps
+
+    // Fire rings (expanding ring on tier 2+ charge shot)
+    this.fireRings = [];
   }
 
   init() {
@@ -108,6 +111,9 @@ class Game {
 
     // Update charging
     this.updateCharging();
+
+    // Update fire rings
+    this.updateFireRings();
 
     // Check bullet-asteroid collisions
     this.checkCollisions();
@@ -221,7 +227,7 @@ class Game {
 
     // Reset all powerups on death
     this.activePowerups.homing = false;
-    this.activePowerups.chargeshot = false;
+    this.activePowerups.chargeshot = 0;
   }
 
   updateDeath() {
@@ -399,7 +405,9 @@ class Game {
         this.activePowerups.homing = true;
         break;
       case 'chargeshot':
-        this.activePowerups.chargeshot = true;
+        if (this.activePowerups.chargeshot < 3) {
+          this.activePowerups.chargeshot++;
+        }
         break;
     }
   }
@@ -490,7 +498,7 @@ class Game {
   startCharging() {
     if (this.state === GameState.PLAYING && this.ship) {
       // If no chargeshot powerup, fire normal bullet immediately
-      if (!this.activePowerups.chargeshot) {
+      if (this.activePowerups.chargeshot === 0) {
         this.bullets.push(this.ship.fire());
         return;
       }
@@ -508,14 +516,21 @@ class Game {
     }
 
     // If no chargeshot powerup, do nothing (already fired on press)
-    if (!this.activePowerups.chargeshot) {
+    if (this.activePowerups.chargeshot === 0) {
       return;
     }
 
+    let tier = this.activePowerups.chargeshot;
+
     if (this.isCharging) {
-      // Fire charged shot
-      let bullet = this.ship.fireCharged(this.chargeLevel, this.maxChargeLevel);
+      // Fire charged shot with tier
+      let bullet = this.ship.fireCharged(this.chargeLevel, this.maxChargeLevel, tier);
       this.bullets.push(bullet);
+
+      // Spawn fire ring at nose for tier 2+
+      if (tier >= 2) {
+        this.spawnFireRing(this.ship.getNosePosition());
+      }
     } else if (this.spaceHeld) {
       // Quick tap - fire normal bullet
       this.bullets.push(this.ship.fire());
@@ -552,13 +567,19 @@ class Game {
     // Get ship nose position for particles
     let nosePos = this.ship.getNosePosition();
     let chargePercent = this.chargeLevel / this.maxChargeLevel;
+    let tier = this.activePowerups.chargeshot;
 
-    // Spawn energy particles flowing inward (more as charge increases)
-    let spawnRate = 1 + floor(chargePercent * 3);  // 1-4 particles per frame
+    // Tier-based spawn parameters
+    let baseSpawnRate = 1 + floor(chargePercent * 3);  // 1-4 particles per frame
+    let spawnRate = tier >= 2 ? baseSpawnRate + 2 : baseSpawnRate;  // +2 at tier 2
+    let minDistance = tier >= 2 ? 100 : 80;
+    let maxDistance = tier >= 2 ? 150 : 120;
+    let particleSize = tier >= 2 ? random(2.5, 5) : random(2, 4);
+
     for (let i = 0; i < spawnRate; i++) {
       // Spawn in a ring around the ship
       let angle = random(TWO_PI);
-      let distance = random(80, 120);
+      let distance = random(minDistance, maxDistance);
       let spawnPos = createVector(
         nosePos.x + cos(angle) * distance,
         nosePos.y + sin(angle) * distance
@@ -569,13 +590,17 @@ class Game {
       let speed = 3 + chargePercent * 4;  // Faster as charge increases
       toNose.setMag(speed);
 
+      // At tier 2+, some particles are cyan
+      let isCyan = tier >= 2 && random() < 0.4;
+
       this.chargeParticles.push({
         pos: spawnPos,
         vel: toNose,
         target: nosePos.copy(),
         life: 30,
         maxLife: 30,
-        size: random(2, 4)
+        size: particleSize,
+        isCyan: isCyan
       });
     }
 
@@ -602,6 +627,36 @@ class Game {
       if (p.life <= 0) {
         this.chargeParticles.splice(i, 1);
       }
+    }
+  }
+
+  spawnFireRing(pos) {
+    this.fireRings.push({
+      pos: pos.copy(),
+      radius: 5,
+      maxRadius: 60,
+      speed: 4,
+      alpha: 200
+    });
+  }
+
+  updateFireRings() {
+    for (let i = this.fireRings.length - 1; i >= 0; i--) {
+      let ring = this.fireRings[i];
+      ring.radius += ring.speed;
+      ring.alpha = map(ring.radius, 5, ring.maxRadius, 200, 0);
+      if (ring.radius >= ring.maxRadius) {
+        this.fireRings.splice(i, 1);
+      }
+    }
+  }
+
+  renderFireRings() {
+    for (let ring of this.fireRings) {
+      noFill();
+      stroke(0, 255, 255, ring.alpha);
+      strokeWeight(2);
+      ellipse(ring.pos.x, ring.pos.y, ring.radius * 2, ring.radius * 2);
     }
   }
 
@@ -658,6 +713,9 @@ class Game {
       bullet.render();
     }
 
+    // Draw fire rings
+    this.renderFireRings();
+
     // Draw ship
     if (this.ship) {
       this.ship.render();
@@ -692,18 +750,27 @@ class Game {
     let r = red(c), g = green(c), b = blue(c);
     let chargePercent = this.chargeLevel / this.maxChargeLevel;
     let nosePos = this.ship.getNosePosition();
+    let tier = this.activePowerups.chargeshot;
+
+    // Cyan accent color for tier 2+
+    let cyanR = 0, cyanG = 255, cyanB = 255;
 
     // Draw energy particles flowing inward
     for (let p of this.chargeParticles) {
       let alpha = map(p.life, 0, p.maxLife, 50, 255);
       noStroke();
 
+      // Use cyan color for marked particles at tier 2+
+      let pr = p.isCyan ? cyanR : r;
+      let pg = p.isCyan ? cyanG : g;
+      let pb = p.isCyan ? cyanB : b;
+
       // Outer glow
-      fill(r, g, b, alpha * 0.3);
+      fill(pr, pg, pb, alpha * 0.3);
       ellipse(p.pos.x, p.pos.y, p.size * 3, p.size * 3);
 
       // Core
-      fill(r, g, b, alpha);
+      fill(pr, pg, pb, alpha);
       ellipse(p.pos.x, p.pos.y, p.size, p.size);
 
       // White center
@@ -713,9 +780,27 @@ class Game {
 
     // Draw growing orb at ship nose
     let baseSize = 5;
-    let maxGrowth = 20;
+    let maxGrowth = tier >= 2 ? 28 : 20;  // Larger at tier 2
     let orbSize = baseSize + chargePercent * maxGrowth;
     let pulse = sin(frameCount * 0.2) * 0.2 + 1;  // Pulsing effect
+
+    // Tier 2+ cyan accent rings (pulsing outward)
+    if (tier >= 2) {
+      let cyanPulse = sin(frameCount * 0.15) * 0.3 + 1;
+      let cyanPulse2 = sin(frameCount * 0.15 + PI) * 0.3 + 1;  // Offset phase
+      let cyanAlpha = 80 + chargePercent * 100;
+
+      noFill();
+      // Outer cyan ring
+      stroke(cyanR, cyanG, cyanB, cyanAlpha * 0.4);
+      strokeWeight(2);
+      ellipse(nosePos.x, nosePos.y, orbSize * 5 * cyanPulse, orbSize * 5 * cyanPulse);
+
+      // Inner cyan ring (offset pulse)
+      stroke(cyanR, cyanG, cyanB, cyanAlpha * 0.7);
+      strokeWeight(1.5);
+      ellipse(nosePos.x, nosePos.y, orbSize * 3.5 * cyanPulse2, orbSize * 3.5 * cyanPulse2);
+    }
 
     // Outer glow
     fill(r, g, b, 50 + chargePercent * 50);
@@ -725,6 +810,12 @@ class Game {
     // Middle glow
     fill(r, g, b, 100 + chargePercent * 100);
     ellipse(nosePos.x, nosePos.y, orbSize * 2.5 * pulse, orbSize * 2.5 * pulse);
+
+    // Tier 2+ cyan tint in middle layer
+    if (tier >= 2) {
+      fill(cyanR, cyanG, cyanB, 30 + chargePercent * 40);
+      ellipse(nosePos.x, nosePos.y, orbSize * 2 * pulse, orbSize * 2 * pulse);
+    }
 
     // Inner glow
     fill(r, g, b, 180 + chargePercent * 75);
@@ -864,10 +955,11 @@ class Game {
     textAlign(RIGHT, TOP);
     textSize(11);
 
-    if (this.activePowerups.chargeshot) {
+    if (this.activePowerups.chargeshot > 0) {
       let c = color('#00FFFF');
       fill(red(c), green(c), blue(c), 200);
-      text('Charge', width - 20, yOffset);
+      let tierLabel = this.getTierLabel(this.activePowerups.chargeshot);
+      text('Charge ' + tierLabel, width - 20, yOffset);
       yOffset += 18;
     }
 
@@ -876,6 +968,15 @@ class Game {
       fill(red(c), green(c), blue(c), 200);
       text('Homing', width - 20, yOffset);
       yOffset += 18;
+    }
+  }
+
+  getTierLabel(tier) {
+    switch (tier) {
+      case 1: return 'I';
+      case 2: return 'II';
+      case 3: return 'III';
+      default: return '';
     }
   }
 

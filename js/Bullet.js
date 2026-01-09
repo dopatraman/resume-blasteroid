@@ -1,8 +1,9 @@
 class Bullet {
-  constructor(x, y, vx, vy, scale = 1) {
+  constructor(x, y, vx, vy, scale = 1, tier = 1) {
     this.pos = createVector(x, y);
     this.vel = createVector(vx, vy);
     this.scale = scale;
+    this.tier = tier;
     this.radius = SHAPES.bullet.radius * scale;
     this.baseLifespan = SHAPES.bullet.lifespan * (1 + scale * 0.3);  // Bigger = longer life
     this.lifespan = this.baseLifespan;
@@ -77,6 +78,18 @@ class Bullet {
       let c = color(PALETTE.ship);
       let r = red(c), g = green(c), b = blue(c);
 
+      // Tier 2+ pulsing cyan halo
+      if (this.tier >= 2) {
+        let cyanPulse = sin(frameCount * 0.15) * 0.3 + 1;
+        noFill();
+        stroke(0, 255, 255, alpha * 0.5);
+        strokeWeight(2);
+        ellipse(this.pos.x, this.pos.y, this.radius * 6 * cyanPulse, this.radius * 6 * cyanPulse);
+        stroke(0, 255, 255, alpha * 0.3);
+        strokeWeight(1);
+        ellipse(this.pos.x, this.pos.y, this.radius * 8 * cyanPulse, this.radius * 8 * cyanPulse);
+      }
+
       // Outer glow (ship color)
       fill(r, g, b, alpha * 0.15);
       noStroke();
@@ -85,6 +98,12 @@ class Bullet {
       // Middle glow (ship color)
       fill(r, g, b, alpha * 0.3);
       ellipse(this.pos.x, this.pos.y, this.radius * 4, this.radius * 4);
+
+      // Tier 2+ cyan tint layer
+      if (this.tier >= 2) {
+        fill(0, 255, 255, alpha * 0.15);
+        ellipse(this.pos.x, this.pos.y, this.radius * 5, this.radius * 5);
+      }
 
       // Inner glow (yellowish)
       fill(255, 255, 200, alpha * 0.6);

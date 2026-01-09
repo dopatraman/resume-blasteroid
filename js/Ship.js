@@ -110,7 +110,7 @@ class Ship {
     return new Bullet(bulletPos.x, bulletPos.y, bulletVel.x, bulletVel.y);
   }
 
-  fireCharged(chargeLevel, maxCharge) {
+  fireCharged(chargeLevel, maxCharge, tier = 1) {
     let nosePos = this.getNosePosition();
 
     // Scale bullet size based on charge (1x to 4x)
@@ -118,14 +118,16 @@ class Ship {
     let bulletScale = 1 + chargePercent * 3;
 
     let bulletVel = p5.Vector.fromAngle(this.rotation);
-    // Slightly faster when charged
-    bulletVel.mult(SHAPES.bullet.speed * (0.8 + chargePercent * 0.4));
+    // Speed multiplier: tier 2 is faster (+30%)
+    let speedMult = 0.8 + chargePercent * 0.4;
+    if (tier >= 2) speedMult += 0.3;
+    bulletVel.mult(SHAPES.bullet.speed * speedMult);
     bulletVel.add(this.vel);
 
     // Bigger muzzle flash for charged shot
     this.emitChargedMuzzleFlash(nosePos, chargePercent);
 
-    return new Bullet(nosePos.x, nosePos.y, bulletVel.x, bulletVel.y, bulletScale);
+    return new Bullet(nosePos.x, nosePos.y, bulletVel.x, bulletVel.y, bulletScale, tier);
   }
 
   emitMuzzleFlash(nosePos) {
