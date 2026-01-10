@@ -1,4 +1,5 @@
 const GameState = {
+  INTRO: 'intro',
   PLAYING: 'playing',
   TRANSITIONING: 'transitioning',
   SECTION: 'section',
@@ -69,11 +70,20 @@ class Game {
     // Beams for ChargeShot III
     this.beams = [];
     this.beamParticles = [];
+
+    // Intro animation state
+    this.introTimer = 0;
+    this.introParticles = [];
+    this.introTextAlpha = 0;
   }
 
   init() {
     this.ship = new Ship(width / 2, height / 2);
-    this.spawnInitialAsteroids();
+    this.state = GameState.INTRO;
+    this.introTimer = 0;
+    this.introParticles = [];
+    this.introTextAlpha = 0;
+    // Don't spawn asteroids yet - wait for intro to complete
   }
 
   spawnInitialAsteroids() {
@@ -88,7 +98,9 @@ class Game {
   }
 
   update() {
-    if (this.state === GameState.PLAYING) {
+    if (this.state === GameState.INTRO) {
+      this.updateIntro();
+    } else if (this.state === GameState.PLAYING) {
       this.updatePlaying();
     } else if (this.state === GameState.TRANSITIONING) {
       this.updateTransition();
@@ -96,6 +108,56 @@ class Game {
       this.updateDeath();
     }
     // SECTION state - game paused, handled by DOM
+  }
+
+  updateIntro() {
+    this.introTimer++;
+
+    // Phase 1: Expanding halo (frames 0-30)
+    if (this.introTimer <= 30 && this.introTimer % 2 === 0) {
+      // Spawn ring of gray particles
+      for (let i = 0; i < 12; i++) {
+        let angle = (TWO_PI / 12) * i + random(-0.1, 0.1);
+        let speed = 3 + random(0, 1);
+        this.introParticles.push({
+          pos: this.ship.pos.copy(),
+          vel: p5.Vector.fromAngle(angle).mult(speed),
+          life: 60,
+          maxLife: 60,
+          size: random(3, 6)
+        });
+      }
+    }
+
+    // Update particles
+    for (let i = this.introParticles.length - 1; i >= 0; i--) {
+      let p = this.introParticles[i];
+      p.pos.add(p.vel);
+      p.vel.mult(0.98);  // Slow down
+      p.life--;
+      if (p.life <= 0) this.introParticles.splice(i, 1);
+    }
+
+    // Phase 2: Text fade in (frames 45-75) - staggered after halo
+    if (this.introTimer > 45 && this.introTimer <= 75) {
+      this.introTextAlpha = map(this.introTimer, 45, 75, 0, 255);
+    }
+
+    // Phase 3: Text visible (frames 75-130)
+    if (this.introTimer > 75 && this.introTimer <= 130) {
+      this.introTextAlpha = 255;
+    }
+
+    // Phase 4: Text fade out (frames 130-160)
+    if (this.introTimer > 130 && this.introTimer <= 160) {
+      this.introTextAlpha = map(this.introTimer, 130, 160, 255, 0);
+    }
+
+    // Phase 5: Spawn asteroids and start game
+    if (this.introTimer > 160) {
+      this.spawnInitialAsteroids();
+      this.state = GameState.PLAYING;
+    }
   }
 
   updatePlaying() {
@@ -1044,7 +1106,57 @@ class Game {
     }
   }
 
+  renderIntro() {
+    background(PALETTE.background);
+
+    // Draw halo particles (gray/slate color)
+    for (let p of this.introParticles) {
+      let alpha = map(p.life, 0, p.maxLife, 0, 200);
+      noStroke();
+
+      // Outer glow
+      fill(136, 136, 136, alpha * 0.3);
+      ellipse(p.pos.x, p.pos.y, p.size * 3, p.size * 3);
+
+      // Core
+      fill(136, 136, 136, alpha);
+      ellipse(p.pos.x, p.pos.y, p.size, p.size);
+    }
+
+    // Draw ship
+    this.ship.render();
+
+    // Draw "START" text above ship - Void Neon style
+    if (this.introTextAlpha > 0) {
+      let c = color(PALETTE.ship);
+      fill(red(c), green(c), blue(c), this.introTextAlpha);
+      noStroke();
+      textAlign(CENTER, CENTER);
+      textSize(14);
+
+      // Manual letter-spacing by drawing each character
+      let label = 'START';
+      let spacing = 4;
+      let charWidth = textWidth('S');
+      let totalWidth = label.length * charWidth + (label.length - 1) * spacing;
+      let startX = this.ship.pos.x - totalWidth / 2 + charWidth / 2;
+
+      for (let i = 0; i < label.length; i++) {
+        text(label[i], startX + i * (charWidth + spacing), this.ship.pos.y - 50);
+      }
+    }
+
+    // Draw footer (legend + controls)
+    this.drawInstructions();
+  }
+
   render() {
+    // Handle intro state separately
+    if (this.state === GameState.INTRO) {
+      this.renderIntro();
+      return;
+    }
+
     // Always draw game elements
     background(PALETTE.background);
 
