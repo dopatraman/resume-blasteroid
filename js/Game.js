@@ -75,6 +75,9 @@ class Game {
     this.introTimer = 0;
     this.introParticles = [];
     this.introTextAlpha = 0;
+
+    // Asteroid fade-in after intro
+    this.asteroidFadeAlpha = 255;  // Start fully visible (normal gameplay)
   }
 
   init() {
@@ -138,29 +141,35 @@ class Game {
       if (p.life <= 0) this.introParticles.splice(i, 1);
     }
 
-    // Phase 2: Text fade in (frames 45-75) - staggered after halo
-    if (this.introTimer > 45 && this.introTimer <= 75) {
-      this.introTextAlpha = map(this.introTimer, 45, 75, 0, 255);
+    // Phase 2: Text fade in (frames 40-55)
+    if (this.introTimer > 40 && this.introTimer <= 55) {
+      this.introTextAlpha = map(this.introTimer, 40, 55, 0, 255);
     }
 
-    // Phase 3: Text visible (frames 75-130)
-    if (this.introTimer > 75 && this.introTimer <= 130) {
+    // Phase 3: Text visible (frames 55-85)
+    if (this.introTimer > 55 && this.introTimer <= 85) {
       this.introTextAlpha = 255;
     }
 
-    // Phase 4: Text fade out (frames 130-160)
-    if (this.introTimer > 130 && this.introTimer <= 160) {
-      this.introTextAlpha = map(this.introTimer, 130, 160, 255, 0);
+    // Phase 4: Text fade out (frames 85-105)
+    if (this.introTimer > 85 && this.introTimer <= 105) {
+      this.introTextAlpha = map(this.introTimer, 85, 105, 255, 0);
     }
 
     // Phase 5: Spawn asteroids and start game
-    if (this.introTimer > 160) {
+    if (this.introTimer > 105) {
       this.spawnInitialAsteroids();
+      this.asteroidFadeAlpha = 0;  // Start faded out
       this.state = GameState.PLAYING;
     }
   }
 
   updatePlaying() {
+    // Fade in asteroids after intro
+    if (this.asteroidFadeAlpha < 255) {
+      this.asteroidFadeAlpha = min(255, this.asteroidFadeAlpha + 5);
+    }
+
     // Update ship
     this.handleInput();
     this.ship.update();
@@ -1188,9 +1197,15 @@ class Game {
       ellipse(p.pos.x, p.pos.y, p.size * 0.4, p.size * 0.4);
     }
 
-    // Draw asteroids
+    // Draw asteroids (with fade-in effect after intro)
+    if (this.asteroidFadeAlpha < 255) {
+      drawingContext.globalAlpha = this.asteroidFadeAlpha / 255;
+    }
     for (let asteroid of this.asteroids) {
       asteroid.render();
+    }
+    if (this.asteroidFadeAlpha < 255) {
+      drawingContext.globalAlpha = 1;  // Reset
     }
 
     // Draw portals
