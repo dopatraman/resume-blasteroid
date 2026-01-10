@@ -141,23 +141,23 @@ class Game {
       if (p.life <= 0) this.introParticles.splice(i, 1);
     }
 
-    // Phase 2: Text fade in (frames 40-55)
-    if (this.introTimer > 40 && this.introTimer <= 55) {
-      this.introTextAlpha = map(this.introTimer, 40, 55, 0, 255);
+    // Phase 2: Text fade in (frames 72-92)
+    if (this.introTimer > 72 && this.introTimer <= 92) {
+      this.introTextAlpha = map(this.introTimer, 72, 92, 0, 255);
     }
 
-    // Phase 3: Text visible (frames 55-85)
-    if (this.introTimer > 55 && this.introTimer <= 85) {
+    // Phase 3: Text visible (frames 92-132)
+    if (this.introTimer > 92 && this.introTimer <= 132) {
       this.introTextAlpha = 255;
     }
 
-    // Phase 4: Text fade out (frames 85-105)
-    if (this.introTimer > 85 && this.introTimer <= 105) {
-      this.introTextAlpha = map(this.introTimer, 85, 105, 255, 0);
+    // Phase 4: Text fade out (frames 132-157)
+    if (this.introTimer > 132 && this.introTimer <= 157) {
+      this.introTextAlpha = map(this.introTimer, 132, 157, 255, 0);
     }
 
     // Phase 5: Spawn asteroids and start game
-    if (this.introTimer > 105) {
+    if (this.introTimer > 157) {
       this.spawnInitialAsteroids();
       this.asteroidFadeAlpha = 0;  // Start faded out
       this.state = GameState.PLAYING;
@@ -1115,6 +1115,27 @@ class Game {
     }
   }
 
+  drawIntroKey(x, y, size, label, width = null) {
+    let w = width || size;
+    let c = color(PALETTE.ship);
+    let r = 3;
+
+    // Key outline (neon lime)
+    stroke(red(c), green(c), blue(c), this.introTextAlpha);
+    strokeWeight(1);
+    noFill();
+    rect(x - w/2, y - size/2, w, size, r);
+
+    // Key label
+    if (label) {
+      fill(red(c), green(c), blue(c), this.introTextAlpha);
+      noStroke();
+      textAlign(CENTER, CENTER);
+      textSize(10);
+      text(label, x, y);
+    }
+  }
+
   renderIntro() {
     background(PALETTE.background);
 
@@ -1153,6 +1174,32 @@ class Game {
       for (let i = 0; i < label.length; i++) {
         text(label[i], startX + i * (charWidth + spacing), this.ship.pos.y - 50);
       }
+
+      // Draw controls below ship - same style as START
+      let controlsY = this.ship.pos.y + 70;
+      let keySize = 16;
+      let keyGap = 3;
+
+      // Arrow keys cluster (←↑↓→)
+      let arrowsX = this.ship.pos.x - 50;
+
+      // Up arrow
+      this.drawIntroKey(arrowsX, controlsY - keySize - keyGap, keySize, '↑');
+      // Left, Down, Right
+      this.drawIntroKey(arrowsX - keySize - keyGap, controlsY, keySize, '←');
+      this.drawIntroKey(arrowsX, controlsY, keySize, '↓');
+      this.drawIntroKey(arrowsX + keySize + keyGap, controlsY, keySize, '→');
+
+      // "move" label
+      textSize(11);
+      text('move', arrowsX, controlsY + keySize + 12);
+
+      // Spacebar
+      let spaceX = this.ship.pos.x + 50;
+      this.drawIntroKey(spaceX, controlsY, keySize, '', 40);
+
+      // "shoot" label
+      text('shoot', spaceX, controlsY + keySize + 12);
     }
 
     // Draw footer (legend + controls)
