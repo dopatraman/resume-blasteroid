@@ -10,8 +10,8 @@ class Bullet {
   }
 
   update(asteroids = []) {
-    // Heat-seeking for charged shots
-    if (this.scale > 1.5 && asteroids.length > 0) {
+    // Heat-seeking when homing powerup is active
+    if (asteroids.length > 0) {
       let closest = this.findClosestAsteroid(asteroids);
       if (closest) {
         this.steerTowards(closest);
