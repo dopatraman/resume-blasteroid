@@ -553,9 +553,13 @@ class Game {
   activatePowerup(type) {
     switch (type) {
       case 'homing':
+        // Clear other powerup types
+        this.activePowerups.chargeshot = 0;
         this.activePowerups.homing = true;
         break;
       case 'chargeshot':
+        // Clear other powerup types
+        this.activePowerups.homing = false;
         if (this.activePowerups.chargeshot < 3) {
           this.activePowerups.chargeshot++;
         }
