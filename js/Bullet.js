@@ -9,10 +9,11 @@ class Bullet {
     this.lifespan = this.baseLifespan;
   }
 
-  setGuidedTarget(startPos, targetAsteroid) {
+  setGuidedTarget(startPos, targetAsteroid, obstacles = []) {
     // Store references for dynamic tracking
     this.guidedStart = startPos.copy();
     this.guidedTargetAsteroid = targetAsteroid;  // Track the asteroid
+    this.guidedObstacles = obstacles.filter(a => a !== targetAsteroid);  // Exclude target
     this.guidedT = 0;  // Progress along curve (0 to 1)
     this.trail = [];  // Trail of recent positions for visual effect
 
@@ -55,12 +56,57 @@ class Bullet {
     let perpendicular = createVector(-toTarget.y, toTarget.x);
     perpendicular.normalize();
 
+    // Check for obstacles blocking the direct path
+    let blockingObstacle = this.findBlockingObstacle(this.guidedStart, this.guidedEnd);
+
+    if (blockingObstacle) {
+      // Increase arc height to go around obstacle
+      let obstacleRadius = blockingObstacle.radius + 20;  // Buffer
+      arcHeight = max(arcHeight, obstacleRadius * 1.5);
+
+      // Choose perpendicular direction that avoids the obstacle
+      // Check which side of the path the obstacle center is on
+      let toObstacle = p5.Vector.sub(blockingObstacle.pos, this.guidedStart);
+      let side = toTarget.x * toObstacle.y - toTarget.y * toObstacle.x;  // Cross product
+
+      // If obstacle is on positive perpendicular side, go negative (and vice versa)
+      if (side > 0) {
+        perpendicular.mult(-1);
+      }
+    }
+
     this.guidedControl = p5.Vector.add(midpoint, p5.Vector.mult(perpendicular, arcHeight));
 
     // Update speed based on current distance
     let speed = this.vel.mag();
     this.guidedDuration = distance / speed;
     this.guidedSpeed = 1 / this.guidedDuration;
+  }
+
+  findBlockingObstacle(start, end) {
+    if (!this.guidedObstacles) return null;
+
+    for (let obstacle of this.guidedObstacles) {
+      // Line-circle intersection test
+      let toEnd = p5.Vector.sub(end, start);
+      let toObstacle = p5.Vector.sub(obstacle.pos, start);
+
+      let pathLength = toEnd.mag();
+      let projection = toObstacle.dot(toEnd) / pathLength;
+
+      // Check if obstacle is along the path (not behind start or past end)
+      if (projection < 0 || projection > pathLength) continue;
+
+      // Find closest point on line to obstacle center
+      let closestPoint = p5.Vector.add(start, p5.Vector.mult(toEnd.copy().normalize(), projection));
+      let distToPath = p5.Vector.dist(closestPoint, obstacle.pos);
+
+      // If path intersects obstacle (with some margin)
+      if (distToPath < obstacle.radius + 15) {
+        return obstacle;
+      }
+    }
+    return null;
   }
 
   update(asteroids = []) {

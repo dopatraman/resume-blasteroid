@@ -79,9 +79,10 @@ class Game {
     // Asteroid fade-in after intro
     this.asteroidFadeAlpha = 255;  // Start fully visible (normal gameplay)
 
-    // Homing II targeting
+    // Homing targeting
     this.targetedAsteroid = null;
     this.targetPoint = null;
+    this.lockedTargets = [];  // Homing III: Array of {asteroid, point}
   }
 
   init() {
@@ -178,13 +179,33 @@ class Game {
     this.handleInput();
     this.ship.update();
 
-    // Update Homing II targeting
+    // Update Homing targeting
     if (this.activePowerups.homing >= 1 && this.spaceHeld) {
-      this.targetedAsteroid = this.getAsteroidInFacingDirection();
-      if (this.targetedAsteroid) {
-        this.targetPoint = this.getTargetPointOnAsteroid(this.targetedAsteroid);
+      let facingAsteroid = this.getAsteroidInFacingDirection();
+
+      if (this.activePowerups.homing >= 3) {
+        // Homing III: Multi-target lock (up to 3)
+        if (facingAsteroid && this.lockedTargets.length < 3) {
+          // Check if not already locked
+          let alreadyLocked = this.lockedTargets.some(t => t.asteroid === facingAsteroid);
+          if (!alreadyLocked) {
+            this.lockedTargets.push({
+              asteroid: facingAsteroid,
+              point: this.getTargetPointOnAsteroid(facingAsteroid)
+            });
+          }
+        }
+        // Update target points for locked asteroids (they move)
+        for (let target of this.lockedTargets) {
+          target.point = this.getTargetPointOnAsteroid(target.asteroid);
+        }
+        // Also show current facing target (for aiming indicator)
+        this.targetedAsteroid = facingAsteroid;
+        this.targetPoint = facingAsteroid ? this.getTargetPointOnAsteroid(facingAsteroid) : null;
       } else {
-        this.targetPoint = null;
+        // Homing I/II: Single target (existing behavior)
+        this.targetedAsteroid = facingAsteroid;
+        this.targetPoint = facingAsteroid ? this.getTargetPointOnAsteroid(facingAsteroid) : null;
       }
     }
 
@@ -294,15 +315,18 @@ class Game {
   createRicochetBullets(bullet, asteroid) {
     let ricochets = [];
 
+    // Homing II = 3 ricochets, Homing III = 5 ricochets
+    let numRicochets = bullet.homingTier >= 3 ? 5 : 3;
+
     // Impact direction: from bullet toward asteroid center
     let impactDir = p5.Vector.sub(asteroid.pos, bullet.pos);
     let impactAngle = atan2(impactDir.y, impactDir.x);
 
-    // Create 5 ricochet bullets spread across 120 degree arc
+    // Create ricochet bullets spread across 120 degree arc
     let angles = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < numRicochets; i++) {
       // Spread from -60 to +60 degrees with slight randomness
-      let baseAngle = map(i, 0, 4, -PI / 3, PI / 3);
+      let baseAngle = map(i, 0, numRicochets - 1, -PI / 3, PI / 3);
       angles.push(impactAngle + baseAngle + random(-0.1, 0.1));
     }
 
@@ -433,6 +457,11 @@ class Game {
     // Reset all powerups on death
     this.activePowerups.homing = 0;
     this.activePowerups.chargeshot = 0;
+
+    // Clear targeting state
+    this.targetedAsteroid = null;
+    this.targetPoint = null;
+    this.lockedTargets = [];
 
     // Clear pending bullets
     this.pendingBullets = [];
@@ -612,13 +641,14 @@ class Game {
       case 'homing':
         // Clear other powerup types
         this.activePowerups.chargeshot = 0;
-        if (this.activePowerups.homing < 2) {
+        if (this.activePowerups.homing < 3) {
           this.activePowerups.homing++;
         }
         break;
       case 'chargeshot':
         // Clear other powerup types
         this.activePowerups.homing = 0;
+        this.lockedTargets = [];
         if (this.activePowerups.chargeshot < 3) {
           this.activePowerups.chargeshot++;
         }
@@ -862,17 +892,33 @@ class Game {
       this.isCharging = false;
       this.targetedAsteroid = null;
       this.targetPoint = null;
+      this.lockedTargets = [];
       return;
     }
 
-    // Homing: Fire guided bullet that arcs to target
+    // Homing: Fire guided bullet(s) that arc to target(s)
     if (this.activePowerups.homing >= 1) {
-      if (this.targetedAsteroid) {
+      // Homing III: Fire at all locked targets
+      if (this.activePowerups.homing >= 3 && this.lockedTargets.length > 0) {
+        for (let target of this.lockedTargets) {
+          let bullet = this.ship.fire();
+          bullet.isHomingII = true;  // Gets ricochet too
+          bullet.homingTier = 3;  // Homing III
+          bullet.vel.mult(1.6);
+          bullet.scale = 1.3;
+          bullet.radius = SHAPES.bullet.radius * bullet.scale;
+          bullet.setGuidedTarget(bullet.pos, target.asteroid, this.asteroids);
+          this.bullets.push(bullet);
+        }
+        this.lockedTargets = [];
+      } else if (this.targetedAsteroid) {
+        // Homing I/II: Single target
         let bullet = this.ship.fire();
 
-        // Homing II: Mark for ricochet on impact
+        // Homing II+: Mark for ricochet on impact and store tier
         if (this.activePowerups.homing >= 2) {
           bullet.isHomingII = true;
+          bullet.homingTier = this.activePowerups.homing;
         }
 
         // Make homing bullet faster and slightly larger (Homing II is a bit faster)
@@ -882,7 +928,7 @@ class Game {
         bullet.radius = SHAPES.bullet.radius * bullet.scale;
 
         // Set up guided path - bullet tracks the asteroid dynamically
-        bullet.setGuidedTarget(bullet.pos, this.targetedAsteroid);
+        bullet.setGuidedTarget(bullet.pos, this.targetedAsteroid, this.asteroids);
 
         this.bullets.push(bullet);
       } else {
@@ -891,6 +937,7 @@ class Game {
       }
       this.targetedAsteroid = null;
       this.targetPoint = null;
+      this.lockedTargets = [];
       this.spaceHeld = false;
       return;
     }
@@ -1348,27 +1395,43 @@ class Game {
   }
 
   renderTargetingCrosshair() {
-    if (!this.targetPoint || this.activePowerups.homing < 1) return;
+    if (this.activePowerups.homing < 1) return;
 
     let pulse = sin(frameCount * 0.2) * 0.3 + 0.7;  // 0.4-1.0 pulsing
-    let size = 15 * pulse;
 
-    push();
-    stroke(255, 0, 0, 200 * pulse);  // Red, pulsing alpha
-    strokeWeight(2);
-    noFill();
+    // Draw locked targets (Homing III) - solid red, larger
+    for (let target of this.lockedTargets) {
+      let size = 18;
+      push();
+      stroke(255, 50, 50, 255);  // Solid red (locked)
+      strokeWeight(3);
+      noFill();
+      let x = target.point.x;
+      let y = target.point.y;
+      line(x - size, y, x + size, y);
+      line(x, y - size, x, y + size);
+      ellipse(x, y, size * 2, size * 2);
+      pop();
+    }
 
-    let x = this.targetPoint.x;
-    let y = this.targetPoint.y;
-
-    // Cross
-    line(x - size, y, x + size, y);
-    line(x, y - size, x, y + size);
-
-    // Circle
-    ellipse(x, y, size * 2, size * 2);
-
-    pop();
+    // Draw current target (pulsing, thinner - "aiming")
+    if (this.targetPoint) {
+      // Skip if already locked
+      let isLocked = this.lockedTargets.some(t => t.asteroid === this.targetedAsteroid);
+      if (!isLocked) {
+        let size = 15 * pulse;
+        push();
+        stroke(255, 0, 0, 200 * pulse);
+        strokeWeight(2);
+        noFill();
+        let x = this.targetPoint.x;
+        let y = this.targetPoint.y;
+        line(x - size, y, x + size, y);
+        line(x, y - size, x, y + size);
+        ellipse(x, y, size * 2, size * 2);
+        pop();
+      }
+    }
   }
 
   // DEBUG: Render bezier curves for guided bullets
