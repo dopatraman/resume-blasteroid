@@ -52,7 +52,7 @@ class Game {
     this.powerups = [];           // Floating powerup entities
     this.powerupDrops = [];       // Collectibles after shooting
     this.activePowerups = {       // Currently held powerups
-      homing: false,
+      homing: 0,            // 0 = none, 1 = Homing I, 2 = Homing II
       chargeshot: 0         // 0 = none, 1-3 = tier level
     };
     this.powerupSpawnTimer = 0;
@@ -78,6 +78,10 @@ class Game {
 
     // Asteroid fade-in after intro
     this.asteroidFadeAlpha = 255;  // Start fully visible (normal gameplay)
+
+    // Homing II targeting
+    this.targetedAsteroid = null;
+    this.targetPoint = null;
   }
 
   init() {
@@ -174,9 +178,19 @@ class Game {
     this.handleInput();
     this.ship.update();
 
+    // Update Homing II targeting
+    if (this.activePowerups.homing >= 1 && this.spaceHeld) {
+      this.targetedAsteroid = this.getAsteroidInFacingDirection();
+      if (this.targetedAsteroid) {
+        this.targetPoint = this.getTargetPointOnAsteroid(this.targetedAsteroid);
+      } else {
+        this.targetPoint = null;
+      }
+    }
+
     // Update bullets
     for (let i = this.bullets.length - 1; i >= 0; i--) {
-      this.bullets[i].update(this.activePowerups.homing ? this.asteroids : []);
+      this.bullets[i].update(this.activePowerups.homing > 0 ? this.asteroids : []);
       if (this.bullets[i].isDead()) {
         this.bullets.splice(i, 1);
       }
@@ -243,13 +257,22 @@ class Game {
     for (let i = this.bullets.length - 1; i >= 0; i--) {
       for (let j = this.asteroids.length - 1; j >= 0; j--) {
         if (this.bullets[i] && this.bullets[i].hits(this.asteroids[j])) {
+          let bullet = this.bullets[i];
+          let asteroid = this.asteroids[j];
+
+          // Spawn ricochet bullets for Homing II (but not from ricochets)
+          if (bullet.isHomingII && !bullet.isRicochet) {
+            let ricochets = this.createRicochetBullets(bullet, asteroid);
+            this.bullets.push(...ricochets);
+          }
+
           // Create explosion particles
-          let explosionParticles = this.asteroids[j].explode();
+          let explosionParticles = asteroid.explode();
           this.particles.push(...explosionParticles);
 
           // Get asteroid type and position before removing
-          let asteroidType = this.asteroids[j].type;
-          let asteroidPos = this.asteroids[j].pos;
+          let asteroidType = asteroid.type;
+          let asteroidPos = asteroid.pos;
 
           // Award points
           this.score += 10;
@@ -266,6 +289,40 @@ class Game {
         }
       }
     }
+  }
+
+  createRicochetBullets(bullet, asteroid) {
+    let ricochets = [];
+
+    // Impact direction: from bullet toward asteroid center
+    let impactDir = p5.Vector.sub(asteroid.pos, bullet.pos);
+    let impactAngle = atan2(impactDir.y, impactDir.x);
+
+    // Create 5 ricochet bullets spread across 120 degree arc
+    let angles = [];
+    for (let i = 0; i < 5; i++) {
+      // Spread from -60 to +60 degrees with slight randomness
+      let baseAngle = map(i, 0, 4, -PI / 3, PI / 3);
+      angles.push(impactAngle + baseAngle + random(-0.1, 0.1));
+    }
+
+    for (let angle of angles) {
+      let vel = p5.Vector.fromAngle(angle);
+      vel.mult(SHAPES.bullet.speed * 0.8);  // Slightly slower than normal
+
+      let ricochet = new Bullet(
+        bullet.pos.x,
+        bullet.pos.y,
+        vel.x,
+        vel.y,
+        0.8,  // Slightly smaller
+        1     // Tier 1
+      );
+      ricochet.isRicochet = true;  // Mark to prevent chaining
+      ricochets.push(ricochet);
+    }
+
+    return ricochets;
   }
 
   checkBeamCollisions() {
@@ -374,7 +431,7 @@ class Game {
     this.shipDeathTimer = 0;
 
     // Reset all powerups on death
-    this.activePowerups.homing = false;
+    this.activePowerups.homing = 0;
     this.activePowerups.chargeshot = 0;
 
     // Clear pending bullets
@@ -555,11 +612,13 @@ class Game {
       case 'homing':
         // Clear other powerup types
         this.activePowerups.chargeshot = 0;
-        this.activePowerups.homing = true;
+        if (this.activePowerups.homing < 2) {
+          this.activePowerups.homing++;
+        }
         break;
       case 'chargeshot':
         // Clear other powerup types
-        this.activePowerups.homing = false;
+        this.activePowerups.homing = 0;
         if (this.activePowerups.chargeshot < 3) {
           this.activePowerups.chargeshot++;
         }
@@ -578,6 +637,132 @@ class Game {
       this.powerups.push(Powerup.spawnFromEdge(type));
       this.powerupSpawnTimer = 0;
     }
+  }
+
+  // Homing II targeting methods
+  getAsteroidInFacingDirection() {
+    if (!this.ship || this.asteroids.length === 0) return null;
+
+    let shipDir = p5.Vector.fromAngle(this.ship.rotation);
+    let closestAsteroid = null;
+    let closestDot = 0.5;  // cos(60°) = 0.5, only asteroids within 60° cone
+
+    for (let asteroid of this.asteroids) {
+      let toAsteroid = p5.Vector.sub(asteroid.pos, this.ship.pos);
+      toAsteroid.normalize();
+
+      let dot = shipDir.dot(toAsteroid);
+      // dot > 0 = in front, dot > 0.5 = within 60° cone
+      // Find the one most directly in front (highest dot product)
+      if (dot > closestDot) {
+        closestDot = dot;
+        closestAsteroid = asteroid;
+      }
+    }
+    return closestAsteroid;
+  }
+
+  getTargetPointOnAsteroid(asteroid) {
+    // Point on asteroid border facing the ship
+    let toAsteroid = p5.Vector.sub(asteroid.pos, this.ship.pos);
+    let hitAngle = atan2(toAsteroid.y, toAsteroid.x);
+
+    let borderPoint = createVector(
+      asteroid.pos.x - cos(hitAngle) * asteroid.radius,
+      asteroid.pos.y - sin(hitAngle) * asteroid.radius
+    );
+    return borderPoint;
+  }
+
+  // Pathfinding for Homing II
+  calculatePathToTarget(start, end, targetAsteroid, depth = 0) {
+    // Prevent infinite recursion
+    if (depth > 10) {
+      return [start, end];
+    }
+
+    // Find blocking asteroids (exclude target asteroid)
+    let obstacles = this.asteroids.filter(a => a !== targetAsteroid);
+
+    // Check if direct path is blocked
+    let blocking = this.getBlockingAsteroid(start, end, obstacles);
+
+    if (!blocking) {
+      // Direct path is clear
+      return [start, end];
+    }
+
+    // Path is blocked - calculate waypoint around obstacle
+    let waypoint = this.getAvoidanceWaypoint(start, end, blocking);
+
+    // Recursively find path: start → waypoint → end
+    let pathToWaypoint = this.calculatePathToTarget(start, waypoint, targetAsteroid, depth + 1);
+    let pathFromWaypoint = this.calculatePathToTarget(waypoint, end, targetAsteroid, depth + 1);
+
+    // Combine paths (remove duplicate waypoint)
+    return [...pathToWaypoint, ...pathFromWaypoint.slice(1)];
+  }
+
+  getBlockingAsteroid(start, end, obstacles) {
+    // Return first asteroid that intersects line segment start→end
+    for (let asteroid of obstacles) {
+      if (this.lineIntersectsCircle(start, end, asteroid.pos, asteroid.radius + 10)) {
+        return asteroid;
+      }
+    }
+    return null;
+  }
+
+  lineIntersectsCircle(lineStart, lineEnd, circleCenter, radius) {
+    // Vector from line start to circle center
+    let d = p5.Vector.sub(lineEnd, lineStart);
+    let f = p5.Vector.sub(lineStart, circleCenter);
+
+    let a = d.dot(d);
+    let b = 2 * f.dot(d);
+    let c = f.dot(f) - radius * radius;
+
+    let discriminant = b * b - 4 * a * c;
+
+    if (discriminant < 0) {
+      return false;  // No intersection
+    }
+
+    discriminant = sqrt(discriminant);
+    let t1 = (-b - discriminant) / (2 * a);
+    let t2 = (-b + discriminant) / (2 * a);
+
+    // Check if intersection is within line segment (0 <= t <= 1)
+    if ((t1 >= 0 && t1 <= 1) || (t2 >= 0 && t2 <= 1)) {
+      return true;
+    }
+
+    // Check if line segment is entirely inside circle
+    if (t1 < 0 && t2 > 1) {
+      return true;
+    }
+
+    return false;
+  }
+
+  getAvoidanceWaypoint(start, end, asteroid) {
+    // Calculate point that routes around asteroid
+    let toAsteroid = p5.Vector.sub(asteroid.pos, start);
+    let toEnd = p5.Vector.sub(end, start);
+
+    // Get perpendicular direction
+    let perpendicular = createVector(-toAsteroid.y, toAsteroid.x);
+    perpendicular.normalize();
+
+    // Determine which side is closer to the end point
+    let testPoint1 = p5.Vector.add(asteroid.pos, p5.Vector.mult(perpendicular, asteroid.radius + 30));
+    let testPoint2 = p5.Vector.sub(asteroid.pos, p5.Vector.mult(perpendicular, asteroid.radius + 30));
+
+    let dist1 = p5.Vector.dist(testPoint1, end);
+    let dist2 = p5.Vector.dist(testPoint2, end);
+
+    // Choose the side that's closer to the destination
+    return dist1 < dist2 ? testPoint1 : testPoint2;
   }
 
   spawnPortal(pos, type) {
@@ -652,12 +837,20 @@ class Game {
 
   startCharging() {
     if (this.state === GameState.PLAYING && this.ship) {
-      // If no chargeshot powerup, fire normal bullet immediately
+      // Homing II: Start targeting mode
+      if (this.activePowerups.homing >= 1) {
+        this.spaceHeld = true;
+        this.spaceHoldTime = 0;
+        return;
+      }
+
+      // Homing I or no powerup: fire normal bullet immediately
       if (this.activePowerups.chargeshot === 0) {
         this.bullets.push(this.ship.fire());
         return;
       }
-      // Otherwise, start charging
+
+      // Chargeshot: start charging
       this.spaceHeld = true;
       this.spaceHoldTime = 0;
     }
@@ -667,6 +860,38 @@ class Game {
     if (this.state !== GameState.PLAYING || !this.ship) {
       this.spaceHeld = false;
       this.isCharging = false;
+      this.targetedAsteroid = null;
+      this.targetPoint = null;
+      return;
+    }
+
+    // Homing: Fire guided bullet that arcs to target
+    if (this.activePowerups.homing >= 1) {
+      if (this.targetedAsteroid) {
+        let bullet = this.ship.fire();
+
+        // Homing II: Mark for ricochet on impact
+        if (this.activePowerups.homing >= 2) {
+          bullet.isHomingII = true;
+        }
+
+        // Make homing bullet faster and slightly larger (Homing II is a bit faster)
+        let speedMult = bullet.isHomingII ? 1.6 : 1.5;
+        bullet.vel.mult(speedMult);
+        bullet.scale = 1.3;
+        bullet.radius = SHAPES.bullet.radius * bullet.scale;
+
+        // Set up guided path - bullet tracks the asteroid dynamically
+        bullet.setGuidedTarget(bullet.pos, this.targetedAsteroid);
+
+        this.bullets.push(bullet);
+      } else {
+        // No target, fire normal bullet
+        this.bullets.push(this.ship.fire());
+      }
+      this.targetedAsteroid = null;
+      this.targetPoint = null;
+      this.spaceHeld = false;
       return;
     }
 
@@ -723,6 +948,9 @@ class Game {
 
   updateCharging() {
     if (!this.ship) return;
+
+    // Skip charging effects during Homing II targeting
+    if (this.activePowerups.homing >= 1) return;
 
     // Track how long space has been held
     if (this.spaceHeld && !this.isCharging) {
@@ -1119,6 +1347,79 @@ class Game {
     }
   }
 
+  renderTargetingCrosshair() {
+    if (!this.targetPoint || this.activePowerups.homing < 1) return;
+
+    let pulse = sin(frameCount * 0.2) * 0.3 + 0.7;  // 0.4-1.0 pulsing
+    let size = 15 * pulse;
+
+    push();
+    stroke(255, 0, 0, 200 * pulse);  // Red, pulsing alpha
+    strokeWeight(2);
+    noFill();
+
+    let x = this.targetPoint.x;
+    let y = this.targetPoint.y;
+
+    // Cross
+    line(x - size, y, x + size, y);
+    line(x, y - size, x, y + size);
+
+    // Circle
+    ellipse(x, y, size * 2, size * 2);
+
+    pop();
+  }
+
+  // DEBUG: Render bezier curves for guided bullets
+  renderGuidedPaths() {
+    for (let bullet of this.bullets) {
+      if (bullet.guidedStart && bullet.guidedControl && bullet.guidedEnd) {
+        push();
+
+        // Draw the full bezier curve (yellow)
+        stroke(255, 255, 0, 150);
+        strokeWeight(2);
+        noFill();
+        beginShape();
+        for (let t = 0; t <= 1; t += 0.05) {
+          let mt = 1 - t;
+          let x = mt * mt * bullet.guidedStart.x + 2 * mt * t * bullet.guidedControl.x + t * t * bullet.guidedEnd.x;
+          let y = mt * mt * bullet.guidedStart.y + 2 * mt * t * bullet.guidedControl.y + t * t * bullet.guidedEnd.y;
+          vertex(x, y);
+        }
+        endShape();
+
+        // Draw control point (magenta)
+        fill(255, 0, 255);
+        noStroke();
+        ellipse(bullet.guidedControl.x, bullet.guidedControl.y, 10, 10);
+
+        // Draw start point (green)
+        fill(0, 255, 0);
+        ellipse(bullet.guidedStart.x, bullet.guidedStart.y, 8, 8);
+
+        // Draw end point (red)
+        fill(255, 0, 0);
+        ellipse(bullet.guidedEnd.x, bullet.guidedEnd.y, 8, 8);
+
+        // Draw lines from start to control, control to end (cyan)
+        stroke(0, 255, 255, 100);
+        strokeWeight(1);
+        line(bullet.guidedStart.x, bullet.guidedStart.y, bullet.guidedControl.x, bullet.guidedControl.y);
+        line(bullet.guidedControl.x, bullet.guidedControl.y, bullet.guidedEnd.x, bullet.guidedEnd.y);
+
+        // Show current t value
+        fill(255);
+        noStroke();
+        textSize(12);
+        text(`t=${bullet.guidedT.toFixed(2)}`, bullet.pos.x + 15, bullet.pos.y - 10);
+
+        pop();
+      }
+    }
+  }
+
   drawIntroKey(x, y, size, label, width = null) {
     let w = width || size;
     let c = color(PALETTE.ship);
@@ -1286,6 +1587,9 @@ class Game {
     if (this.ship) {
       this.ship.render();
     }
+
+    // Draw Homing II targeting crosshair
+    this.renderTargetingCrosshair();
 
     // Draw charging effect
     this.renderCharging();
@@ -1566,10 +1870,11 @@ class Game {
       yOffset += 18;
     }
 
-    if (this.activePowerups.homing) {
+    if (this.activePowerups.homing > 0) {
       let c = color('#FF00FF');
       fill(red(c), green(c), blue(c), 200);
-      text('Homing', width - 20, yOffset);
+      let tierLabel = this.getTierLabel(this.activePowerups.homing);
+      text('Homing ' + tierLabel, width - 20, yOffset);
       yOffset += 18;
     }
   }
