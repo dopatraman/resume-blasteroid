@@ -12,8 +12,10 @@ class Game {
     this.ship = null;
     this.asteroids = [];
     this.bullets = [];
-    this.particles = [];
     this.currentSection = null;
+
+    // Particle System
+    this.particleSystem = new ParticleSystem();
 
     // Transition animation
     this.fadeAlpha = 0;
@@ -33,8 +35,7 @@ class Game {
     this.shipDeathTimer = 0;
     this.shipDeathDuration = 180;  // 3 seconds at 60fps
     this.shipRespawnDelay = 120;   // 2 seconds before respawn
-    this.deathRings = [];          // Pulsing rings effect
-    this.shipDebris = [];          // Ship debris particles
+    // deathRings and shipDebris moved to ParticleSystem
 
     // Portals
     this.portals = [];
@@ -43,7 +44,7 @@ class Game {
     this.isCharging = false;
     this.chargeLevel = 0;
     this.maxChargeLevel = 90;      // 1.5 seconds at 60fps
-    this.chargeParticles = [];
+    // chargeParticles moved to ParticleSystem
     this.spaceHeld = false;
     this.spaceHoldTime = 0;
     this.chargeThreshold = 12;     // ~200ms before charging starts
@@ -58,8 +59,7 @@ class Game {
     this.powerupSpawnTimer = 0;
     this.powerupSpawnInterval = 600;  // 10 seconds at 60fps
 
-    // Fire rings (expanding ring on tier 2+ charge shot)
-    this.fireRings = [];
+    // Fire rings moved to ParticleSystem
 
     // Pending bullets for sequential spawn (ChargeShot II)
     this.pendingBullets = [];
@@ -69,11 +69,11 @@ class Game {
 
     // Beams for ChargeShot III
     this.beams = [];
-    this.beamParticles = [];
+    // beamParticles moved to ParticleSystem
 
     // Intro animation state
     this.introTimer = 0;
-    this.introParticles = [];
+    // introParticles moved to ParticleSystem
     this.introTextAlpha = 0;
 
     // Asteroid fade-in after intro
@@ -83,13 +83,19 @@ class Game {
     this.targetedAsteroid = null;
     this.targetPoint = null;
     this.lockedTargets = [];  // Homing III: Array of {asteroid, point}
+
+    // UI Renderer
+    this.ui = new UIRenderer(this);
+
+    // Collision Manager
+    this.collisions = new CollisionManager(this);
   }
 
   init() {
     this.ship = new Ship(width / 2, height / 2);
     this.state = GameState.INTRO;
     this.introTimer = 0;
-    this.introParticles = [];
+    this.particleSystem.introParticles = [];
     this.introTextAlpha = 0;
     // Don't spawn asteroids yet - wait for intro to complete
   }
@@ -127,7 +133,7 @@ class Game {
       for (let i = 0; i < 12; i++) {
         let angle = (TWO_PI / 12) * i + random(-0.1, 0.1);
         let speed = 3 + random(0, 1);
-        this.introParticles.push({
+        this.particleSystem.introParticles.push({
           pos: this.ship.pos.copy(),
           vel: p5.Vector.fromAngle(angle).mult(speed),
           life: 60,
@@ -138,12 +144,12 @@ class Game {
     }
 
     // Update particles
-    for (let i = this.introParticles.length - 1; i >= 0; i--) {
-      let p = this.introParticles[i];
+    for (let i = this.particleSystem.introParticles.length - 1; i >= 0; i--) {
+      let p = this.particleSystem.introParticles[i];
       p.pos.add(p.vel);
       p.vel.mult(0.98);  // Slow down
       p.life--;
-      if (p.life <= 0) this.introParticles.splice(i, 1);
+      if (p.life <= 0) this.particleSystem.introParticles.splice(i, 1);
     }
 
     // Phase 2: Text fade in (frames 72-92)
@@ -238,24 +244,20 @@ class Game {
     this.updateBeams();
     this.updateBeamParticles();
 
-    // Check bullet-asteroid collisions
-    this.checkCollisions();
-
-    // Check beam-asteroid collisions (ChargeShot III)
-    this.checkBeamCollisions();
-
-    // Check ship-asteroid collisions
-    this.checkShipCollisions();
+    // Check collisions via manager
+    this.collisions.checkBulletAsteroid();
+    this.collisions.checkBeamAsteroid();
+    this.collisions.checkShipAsteroid();
 
     // Update portals and check if ship enters one
     this.updatePortals();
-    this.checkPortalCollisions();
+    this.collisions.checkPortal();
 
     // Update powerups
     this.updatePowerups();
     this.updatePowerupDrops();
-    this.checkPowerupCollisions();
-    this.checkPowerupDropCollisions();
+    this.collisions.checkBulletPowerup();
+    this.collisions.checkShipPowerupDrop();
     this.managePowerups();
 
     // Spawn new asteroids if needed
@@ -274,150 +276,6 @@ class Game {
     }
   }
 
-  checkCollisions() {
-    for (let i = this.bullets.length - 1; i >= 0; i--) {
-      for (let j = this.asteroids.length - 1; j >= 0; j--) {
-        if (this.bullets[i] && this.bullets[i].hits(this.asteroids[j])) {
-          let bullet = this.bullets[i];
-          let asteroid = this.asteroids[j];
-
-          // Spawn ricochet bullets for Homing II (but not from ricochets)
-          if (bullet.isHomingII && !bullet.isRicochet) {
-            let ricochets = this.createRicochetBullets(bullet, asteroid);
-            this.bullets.push(...ricochets);
-          }
-
-          // Create explosion particles
-          let explosionParticles = asteroid.explode();
-          this.particles.push(...explosionParticles);
-
-          // Get asteroid type and position before removing
-          let asteroidType = asteroid.type;
-          let asteroidPos = asteroid.pos;
-
-          // Award points
-          this.score += 10;
-
-          // Remove bullet and asteroid
-          this.bullets.splice(i, 1);
-          this.asteroids.splice(j, 1);
-
-          // Spawn portal for section asteroids (not neutral)
-          if (asteroidType !== 'neutral') {
-            this.spawnPortal(asteroidPos, asteroidType);
-          }
-          return;  // Exit after hit
-        }
-      }
-    }
-  }
-
-  createRicochetBullets(bullet, asteroid) {
-    let ricochets = [];
-
-    // Homing II = 3 ricochets, Homing III = 5 ricochets
-    let numRicochets = bullet.homingTier >= 3 ? 5 : 3;
-
-    // Impact direction: from bullet toward asteroid center
-    let impactDir = p5.Vector.sub(asteroid.pos, bullet.pos);
-    let impactAngle = atan2(impactDir.y, impactDir.x);
-
-    // Create ricochet bullets spread across 120 degree arc
-    let angles = [];
-    for (let i = 0; i < numRicochets; i++) {
-      // Spread from -60 to +60 degrees with slight randomness
-      let baseAngle = map(i, 0, numRicochets - 1, -PI / 3, PI / 3);
-      angles.push(impactAngle + baseAngle + random(-0.1, 0.1));
-    }
-
-    for (let angle of angles) {
-      let vel = p5.Vector.fromAngle(angle);
-      vel.mult(SHAPES.bullet.speed * 0.8);  // Slightly slower than normal
-
-      let ricochet = new Bullet(
-        bullet.pos.x,
-        bullet.pos.y,
-        vel.x,
-        vel.y,
-        0.8,  // Slightly smaller
-        1     // Tier 1
-      );
-      ricochet.isRicochet = true;  // Mark to prevent chaining
-      ricochets.push(ricochet);
-    }
-
-    return ricochets;
-  }
-
-  checkBeamCollisions() {
-    for (let beam of this.beams) {
-      let endPos = p5.Vector.add(beam.startPos, p5.Vector.mult(beam.direction, beam.currentLength));
-
-      for (let j = this.asteroids.length - 1; j >= 0; j--) {
-        let asteroid = this.asteroids[j];
-
-        // Check line-circle collision
-        if (this.lineCircleCollision(beam.startPos, endPos, asteroid.pos, asteroid.radius + beam.width / 2)) {
-          // Create explosion particles
-          let explosionParticles = asteroid.explode();
-          this.particles.push(...explosionParticles);
-
-          // Get asteroid type and position before removing
-          let asteroidType = asteroid.type;
-          let asteroidPos = asteroid.pos;
-
-          // Award points
-          this.score += 10;
-
-          // Remove asteroid (beam doesn't get consumed)
-          this.asteroids.splice(j, 1);
-
-          // Spawn portal for section asteroids (not neutral)
-          if (asteroidType !== 'neutral') {
-            this.spawnPortal(asteroidPos, asteroidType);
-          }
-        }
-      }
-    }
-  }
-
-  lineCircleCollision(lineStart, lineEnd, circleCenter, circleRadius) {
-    // Vector from line start to end
-    let lineVec = p5.Vector.sub(lineEnd, lineStart);
-    // Vector from line start to circle center
-    let toCircle = p5.Vector.sub(circleCenter, lineStart);
-
-    // Project circle center onto line
-    let lineLenSquared = lineVec.magSq();
-    if (lineLenSquared === 0) {
-      // Line is a point
-      return p5.Vector.dist(lineStart, circleCenter) < circleRadius;
-    }
-
-    // Parameter t for closest point on line segment
-    let t = max(0, min(1, p5.Vector.dot(toCircle, lineVec) / lineLenSquared));
-
-    // Closest point on line segment
-    let closest = p5.Vector.add(lineStart, p5.Vector.mult(lineVec, t));
-
-    // Distance from circle center to closest point
-    let distance = p5.Vector.dist(closest, circleCenter);
-
-    return distance < circleRadius;
-  }
-
-  checkShipCollisions() {
-    if (!this.ship) return;
-
-    for (let asteroid of this.asteroids) {
-      let d = dist(this.ship.pos.x, this.ship.pos.y, asteroid.pos.x, asteroid.pos.y);
-      if (d < asteroid.radius + this.ship.size * 0.5) {
-        this.shipDeath();
-        return;
-      }
-    }
-  }
-
   shipDeath() {
     let shipPos = this.ship.pos.copy();
     let shipColor = PALETTE.ship;
@@ -426,7 +284,7 @@ class Game {
     for (let i = 0; i < 40; i++) {
       let angle = random(TWO_PI);
       let speed = random(1, 4);
-      this.shipDebris.push({
+      this.particleSystem.shipDebris.push({
         pos: shipPos.copy(),
         vel: p5.Vector.fromAngle(angle).mult(speed),
         life: random(60, 120),
@@ -440,7 +298,7 @@ class Game {
 
     // Create initial pulsing rings
     for (let i = 0; i < 5; i++) {
-      this.deathRings.push({
+      this.particleSystem.deathRings.push({
         pos: shipPos.copy(),
         radius: 10,
         maxRadius: 200 + i * 60,
@@ -471,20 +329,20 @@ class Game {
     this.shipDeathTimer++;
 
     // Update debris particles
-    for (let i = this.shipDebris.length - 1; i >= 0; i--) {
-      let d = this.shipDebris[i];
+    for (let i = this.particleSystem.shipDebris.length - 1; i >= 0; i--) {
+      let d = this.particleSystem.shipDebris[i];
       d.pos.add(d.vel);
       d.vel.mult(0.98);
       d.rotation += d.rotSpeed;
       d.life--;
       if (d.life <= 0) {
-        this.shipDebris.splice(i, 1);
+        this.particleSystem.shipDebris.splice(i, 1);
       }
     }
 
     // Update pulsing rings
-    for (let i = this.deathRings.length - 1; i >= 0; i--) {
-      let ring = this.deathRings[i];
+    for (let i = this.particleSystem.deathRings.length - 1; i >= 0; i--) {
+      let ring = this.particleSystem.deathRings[i];
       if (ring.delay > 0) {
         ring.delay--;
         continue;
@@ -492,7 +350,7 @@ class Game {
       ring.radius += ring.speed;
       ring.alpha = map(ring.radius, 10, ring.maxRadius, 255, 0);
       if (ring.radius >= ring.maxRadius) {
-        this.deathRings.splice(i, 1);
+        this.particleSystem.deathRings.splice(i, 1);
       }
     }
 
@@ -510,8 +368,8 @@ class Game {
   respawnShip() {
     this.ship = new Ship(width / 2, height / 2);
     this.state = GameState.PLAYING;
-    this.shipDebris = [];
-    this.deathRings = [];
+    this.particleSystem.shipDebris = [];
+    this.particleSystem.deathRings = [];
 
     // Clear nearby asteroids to give player breathing room
     this.asteroids = this.asteroids.filter(a => {
@@ -521,13 +379,13 @@ class Game {
   }
 
   updateParticles() {
-    for (let i = this.particles.length - 1; i >= 0; i--) {
-      let p = this.particles[i];
+    for (let i = this.particleSystem.particles.length - 1; i >= 0; i--) {
+      let p = this.particleSystem.particles[i];
       p.pos.add(p.vel);
       p.vel.mult(0.98);  // Slow down
       p.life--;
       if (p.life <= 0) {
-        this.particles.splice(i, 1);
+        this.particleSystem.particles.splice(i, 1);
       }
     }
   }
@@ -538,20 +396,6 @@ class Game {
       portal.life--;
       if (portal.life <= 0) {
         this.portals.splice(i, 1);
-      }
-    }
-  }
-
-  checkPortalCollisions() {
-    if (!this.ship) return;
-
-    for (let i = this.portals.length - 1; i >= 0; i--) {
-      let portal = this.portals[i];
-      let d = dist(this.ship.pos.x, this.ship.pos.y, portal.pos.x, portal.pos.y);
-      if (d < portal.radius + this.ship.size * 0.3) {
-        this.triggerTransition(portal.type);
-        this.portals = [];  // Clear all portals on transition
-        return;
       }
     }
   }
@@ -599,39 +443,6 @@ class Game {
       this.powerupDrops[i].update();
       if (this.powerupDrops[i].isDead()) {
         this.powerupDrops.splice(i, 1);
-      }
-    }
-  }
-
-  checkPowerupCollisions() {
-    // Check if bullets hit powerups
-    for (let i = this.bullets.length - 1; i >= 0; i--) {
-      for (let j = this.powerups.length - 1; j >= 0; j--) {
-        if (this.powerups[j].hits(this.bullets[i])) {
-          // Create powerup drop at powerup position
-          let powerup = this.powerups[j];
-          this.powerupDrops.push(new PowerupDrop(powerup.pos.x, powerup.pos.y, powerup.type));
-
-          // Remove bullet and powerup
-          this.bullets.splice(i, 1);
-          this.powerups.splice(j, 1);
-          return;
-        }
-      }
-    }
-  }
-
-  checkPowerupDropCollisions() {
-    if (!this.ship) return;
-
-    for (let i = this.powerupDrops.length - 1; i >= 0; i--) {
-      let drop = this.powerupDrops[i];
-      let d = dist(this.ship.pos.x, this.ship.pos.y, drop.pos.x, drop.pos.y);
-      if (d < drop.radius + this.ship.size * 0.5) {
-        // Activate powerup
-        this.activatePowerup(drop.type);
-        this.powerupDrops.splice(i, 1);
-        return;
       }
     }
   }
@@ -990,7 +801,7 @@ class Game {
     this.spaceHoldTime = 0;
     this.isCharging = false;
     this.chargeLevel = 0;
-    this.chargeParticles = [];
+    this.particleSystem.chargeParticles = [];
   }
 
   updateCharging() {
@@ -1054,7 +865,7 @@ class Game {
         isCyan = random() < 0.4;
       }
 
-      this.chargeParticles.push({
+      this.particleSystem.chargeParticles.push({
         pos: spawnPos,
         vel: toNose,
         target: nosePos.copy(),
@@ -1067,8 +878,8 @@ class Game {
     }
 
     // Update charge particles
-    for (let i = this.chargeParticles.length - 1; i >= 0; i--) {
-      let p = this.chargeParticles[i];
+    for (let i = this.particleSystem.chargeParticles.length - 1; i >= 0; i--) {
+      let p = this.particleSystem.chargeParticles[i];
 
       // Update target to current nose position (ship might move)
       p.target = this.ship.getNosePosition();
@@ -1077,7 +888,7 @@ class Game {
       let toTarget = p5.Vector.sub(p.target, p.pos);
       if (toTarget.mag() < 10) {
         // Close enough, remove particle
-        this.chargeParticles.splice(i, 1);
+        this.particleSystem.chargeParticles.splice(i, 1);
         continue;
       }
       toTarget.setMag(p.vel.mag() * 1.05);  // Accelerate slightly
@@ -1087,7 +898,7 @@ class Game {
       p.life--;
 
       if (p.life <= 0) {
-        this.chargeParticles.splice(i, 1);
+        this.particleSystem.chargeParticles.splice(i, 1);
       }
     }
 
@@ -1100,7 +911,7 @@ class Game {
   }
 
   spawnFireRing(pos) {
-    this.fireRings.push({
+    this.particleSystem.fireRings.push({
       pos: pos.copy(),
       radius: 5,
       maxRadius: 60,
@@ -1110,12 +921,12 @@ class Game {
   }
 
   updateFireRings() {
-    for (let i = this.fireRings.length - 1; i >= 0; i--) {
-      let ring = this.fireRings[i];
+    for (let i = this.particleSystem.fireRings.length - 1; i >= 0; i--) {
+      let ring = this.particleSystem.fireRings[i];
       ring.radius += ring.speed;
       ring.alpha = map(ring.radius, 5, ring.maxRadius, 200, 0);
       if (ring.radius >= ring.maxRadius) {
-        this.fireRings.splice(i, 1);
+        this.particleSystem.fireRings.splice(i, 1);
       }
     }
   }
@@ -1196,7 +1007,7 @@ class Game {
           let colorTypes = ['magenta', 'magenta', 'green', 'green', 'cyan', 'cyan', 'white', 'white'];
           let colorType = random(colorTypes);
 
-          this.beamParticles.push({
+          this.particleSystem.beamParticles.push({
             pos: pos,
             vel: vel,
             life: random(15, 30),
@@ -1240,7 +1051,7 @@ class Game {
             // Helix particles are cyan or magenta based on which helix
             let colorType = k === 0 ? 'cyan' : 'magenta';
 
-            this.beamParticles.push({
+            this.particleSystem.beamParticles.push({
               pos: helixPos,
               vel: vel,
               life: random(15, 25),
@@ -1343,19 +1154,19 @@ class Game {
   }
 
   updateBeamParticles() {
-    for (let i = this.beamParticles.length - 1; i >= 0; i--) {
-      let p = this.beamParticles[i];
+    for (let i = this.particleSystem.beamParticles.length - 1; i >= 0; i--) {
+      let p = this.particleSystem.beamParticles[i];
       p.pos.add(p.vel);
       p.vel.mult(0.95);  // Slow down
       p.life--;
       if (p.life <= 0) {
-        this.beamParticles.splice(i, 1);
+        this.particleSystem.beamParticles.splice(i, 1);
       }
     }
   }
 
   renderBeamParticles() {
-    for (let p of this.beamParticles) {
+    for (let p of this.particleSystem.beamParticles) {
       let alpha = map(p.life, 0, p.maxLife, 0, 255);
       noStroke();
 
@@ -1386,7 +1197,7 @@ class Game {
   }
 
   renderFireRings() {
-    for (let ring of this.fireRings) {
+    for (let ring of this.particleSystem.fireRings) {
       noFill();
       stroke(0, 255, 255, ring.alpha);
       strokeWeight(2);
@@ -1483,101 +1294,10 @@ class Game {
     }
   }
 
-  drawIntroKey(x, y, size, label, width = null) {
-    let w = width || size;
-    let c = color(PALETTE.ship);
-    let r = 3;
-
-    // Key outline (neon lime)
-    stroke(red(c), green(c), blue(c), this.introTextAlpha);
-    strokeWeight(1);
-    noFill();
-    rect(x - w/2, y - size/2, w, size, r);
-
-    // Key label
-    if (label) {
-      fill(red(c), green(c), blue(c), this.introTextAlpha);
-      noStroke();
-      textAlign(CENTER, CENTER);
-      textSize(10);
-      text(label, x, y);
-    }
-  }
-
-  renderIntro() {
-    background(PALETTE.background);
-
-    // Draw halo particles (gray/slate color)
-    for (let p of this.introParticles) {
-      let alpha = map(p.life, 0, p.maxLife, 0, 200);
-      noStroke();
-
-      // Outer glow
-      fill(136, 136, 136, alpha * 0.3);
-      ellipse(p.pos.x, p.pos.y, p.size * 3, p.size * 3);
-
-      // Core
-      fill(136, 136, 136, alpha);
-      ellipse(p.pos.x, p.pos.y, p.size, p.size);
-    }
-
-    // Draw ship
-    this.ship.render();
-
-    // Draw "START" text above ship - Void Neon style
-    if (this.introTextAlpha > 0) {
-      let c = color(PALETTE.ship);
-      fill(red(c), green(c), blue(c), this.introTextAlpha);
-      noStroke();
-      textAlign(CENTER, CENTER);
-      textSize(14);
-
-      // Manual letter-spacing by drawing each character
-      let label = 'START';
-      let spacing = 4;
-      let charWidth = textWidth('S');
-      let totalWidth = label.length * charWidth + (label.length - 1) * spacing;
-      let startX = this.ship.pos.x - totalWidth / 2 + charWidth / 2;
-
-      for (let i = 0; i < label.length; i++) {
-        text(label[i], startX + i * (charWidth + spacing), this.ship.pos.y - 50);
-      }
-
-      // Draw controls below ship - same style as START
-      let controlsY = this.ship.pos.y + 70;
-      let keySize = 16;
-      let keyGap = 3;
-
-      // Arrow keys cluster (←↑↓→)
-      let arrowsX = this.ship.pos.x - 50;
-
-      // Up arrow
-      this.drawIntroKey(arrowsX, controlsY - keySize - keyGap, keySize, '↑');
-      // Left, Down, Right
-      this.drawIntroKey(arrowsX - keySize - keyGap, controlsY, keySize, '←');
-      this.drawIntroKey(arrowsX, controlsY, keySize, '↓');
-      this.drawIntroKey(arrowsX + keySize + keyGap, controlsY, keySize, '→');
-
-      // "move" label
-      textSize(11);
-      text('move', arrowsX, controlsY + keySize + 12);
-
-      // Spacebar
-      let spaceX = this.ship.pos.x + 50;
-      this.drawIntroKey(spaceX, controlsY, keySize, '', 40);
-
-      // "shoot" label
-      text('shoot', spaceX, controlsY + keySize + 12);
-    }
-
-    // Draw footer (legend + controls)
-    this.drawInstructions();
-  }
-
   render() {
     // Handle intro state separately
     if (this.state === GameState.INTRO) {
-      this.renderIntro();
+      this.ui.renderIntro();
       return;
     }
 
@@ -1585,7 +1305,7 @@ class Game {
     background(PALETTE.background);
 
     // Draw particles with glowing ember effect
-    for (let p of this.particles) {
+    for (let p of this.particleSystem.particles) {
       let alpha = map(p.life, 0, p.maxLife, 0, 255);
       let c = color(p.color);
       let r = red(c), g = green(c), b = blue(c);
@@ -1665,7 +1385,7 @@ class Game {
     }
 
     // Draw death effects
-    this.renderDeathEffects();
+    this.ui.renderDeathEffects();
 
     // Draw fade overlay during transitions
     if (this.state === GameState.TRANSITIONING || this.fadeAlpha > 0) {
@@ -1676,9 +1396,9 @@ class Game {
 
     // Draw UI when playing or dead
     if (this.state === GameState.PLAYING || this.state === GameState.DEAD) {
-      this.drawScore();
+      this.ui.drawScore();
       if (this.state === GameState.PLAYING) {
-        this.drawInstructions();
+        this.ui.drawInstructions();
       }
     }
   }
@@ -1697,7 +1417,7 @@ class Game {
     let magentaR = 255, magentaG = 0, magentaB = 255;
 
     // Draw energy particles flowing inward
-    for (let p of this.chargeParticles) {
+    for (let p of this.particleSystem.chargeParticles) {
       let alpha = map(p.life, 0, p.maxLife, 50, 255);
       noStroke();
 
@@ -1800,64 +1520,7 @@ class Game {
     ellipse(nosePos.x, nosePos.y, orbSize * 0.5, orbSize * 0.5);
   }
 
-  renderDeathEffects() {
-    let c = color(PALETTE.ship);
-    let r = red(c), g = green(c), b = blue(c);
-
-    // Draw pulsing rings
-    for (let ring of this.deathRings) {
-      if (ring.delay > 0) continue;
-
-      noFill();
-
-      // Outer glow
-      stroke(r, g, b, ring.alpha * 0.2);
-      strokeWeight(8);
-      ellipse(ring.pos.x, ring.pos.y, ring.radius * 2, ring.radius * 2);
-
-      // Middle ring
-      stroke(r, g, b, ring.alpha * 0.5);
-      strokeWeight(4);
-      ellipse(ring.pos.x, ring.pos.y, ring.radius * 2, ring.radius * 2);
-
-      // Bright core ring
-      stroke(r, g, b, ring.alpha);
-      strokeWeight(2);
-      ellipse(ring.pos.x, ring.pos.y, ring.radius * 2, ring.radius * 2);
-
-      // White inner edge
-      stroke(255, 255, 255, ring.alpha * 0.7);
-      strokeWeight(1);
-      ellipse(ring.pos.x, ring.pos.y, ring.radius * 2 - 4, ring.radius * 2 - 4);
-    }
-
-    // Draw ship debris with glow
-    for (let d of this.shipDebris) {
-      let alpha = map(d.life, 0, d.maxLife, 0, 255);
-      noStroke();
-
-      // Outer glow
-      fill(r, g, b, alpha * 0.15);
-      ellipse(d.pos.x, d.pos.y, d.size * 4, d.size * 4);
-
-      // Middle glow
-      fill(r, g, b, alpha * 0.3);
-      ellipse(d.pos.x, d.pos.y, d.size * 2.5, d.size * 2.5);
-
-      // Core
-      fill(r, g, b, alpha);
-      push();
-      translate(d.pos.x, d.pos.y);
-      rotate(d.rotation);
-      // Draw as small triangle fragment
-      triangle(0, -d.size/2, -d.size/2, d.size/2, d.size/2, d.size/2);
-      pop();
-
-      // White hot center
-      fill(255, 255, 255, alpha * 0.6);
-      ellipse(d.pos.x, d.pos.y, d.size * 0.3, d.size * 0.3);
-    }
-  }
+  // renderDeathEffects moved to UIRenderer
 
   renderPortals() {
     for (let portal of this.portals) {
@@ -1909,140 +1572,5 @@ class Game {
     }
   }
 
-  drawScore() {
-    fill(PALETTE.textDim);
-    noStroke();
-    textAlign(RIGHT, TOP);
-    textSize(14);
-    text(this.score, width - 20, 20);
-
-    // Active powerups display
-    this.drawActivePowerups();
-  }
-
-  drawActivePowerups() {
-    let yOffset = 45;
-    textAlign(RIGHT, TOP);
-    textSize(11);
-
-    if (this.activePowerups.chargeshot > 0) {
-      let c = color('#00FFFF');
-      fill(red(c), green(c), blue(c), 200);
-      let tierLabel = this.getTierLabel(this.activePowerups.chargeshot);
-      text('Charge ' + tierLabel, width - 20, yOffset);
-      yOffset += 18;
-    }
-
-    if (this.activePowerups.homing > 0) {
-      let c = color('#FF00FF');
-      fill(red(c), green(c), blue(c), 200);
-      let tierLabel = this.getTierLabel(this.activePowerups.homing);
-      text('Homing ' + tierLabel, width - 20, yOffset);
-      yOffset += 18;
-    }
-  }
-
-  getTierLabel(tier) {
-    switch (tier) {
-      case 1: return 'I';
-      case 2: return 'II';
-      case 3: return 'III';
-      default: return '';
-    }
-  }
-
-  drawInstructions() {
-    let bottomMargin = 40;
-    let rowY = height - bottomMargin;
-    let boxSize = 12;
-    let legendSpacing = 70;
-
-    // --- Legend (left side) ---
-    let legendX = 30;
-
-    textAlign(LEFT, CENTER);
-    textSize(11);
-
-    // Work - Orange
-    fill(PALETTE.asteroids.work);
-    noStroke();
-    rect(legendX, rowY - boxSize / 2, boxSize, boxSize);
-    fill(PALETTE.textDim);
-    text('Work', legendX + boxSize + 6, rowY);
-
-    // About - Blue
-    fill(PALETTE.asteroids.about);
-    rect(legendX + legendSpacing, rowY - boxSize / 2, boxSize, boxSize);
-    fill(PALETTE.textDim);
-    text('About', legendX + legendSpacing + boxSize + 6, rowY);
-
-    // Resume - Yellow
-    fill(PALETTE.asteroids.resume);
-    rect(legendX + legendSpacing * 2, rowY - boxSize / 2, boxSize, boxSize);
-    fill(PALETTE.textDim);
-    text('Resume', legendX + legendSpacing * 2 + boxSize + 6, rowY);
-
-    // --- Controls (right side) ---
-    this.drawControlsHint(rowY);
-  }
-
-  drawControlsHint(rowY) {
-    let keySize = 18;
-    let keyGap = 2;
-    let rightMargin = 30;
-
-    // Position from right edge
-    let controlsEndX = width - rightMargin;
-
-    // "shoot" text and spacebar
-    let spaceWidth = 45;
-    textAlign(LEFT, CENTER);
-    textSize(11);
-    fill(PALETTE.textDim);
-    noStroke();
-
-    let shootTextX = controlsEndX - 30;
-    text('shoot', shootTextX, rowY);
-
-    let spaceX = shootTextX - spaceWidth - 10;
-    this.drawKey(spaceX, rowY - keySize / 2, keySize, '', spaceWidth);
-
-    // "move" text
-    let moveTextX = spaceX - 45;
-    text('move', moveTextX, rowY);
-
-    // Arrow keys layout (keyboard style)
-    //     [↑]
-    // [←][↓][→]
-    let arrowsRightEdge = moveTextX - 15;
-    let arrowsCenterX = arrowsRightEdge - keySize - keyGap - keySize / 2;
-
-    // Up arrow (centered above down)
-    this.drawKey(arrowsCenterX - keySize / 2, rowY - keySize - keyGap / 2 - keySize / 2, keySize, '↑');
-
-    // Left, Down, Right arrows
-    this.drawKey(arrowsCenterX - keySize / 2 - keyGap - keySize, rowY - keySize / 2, keySize, '←');
-    this.drawKey(arrowsCenterX - keySize / 2, rowY - keySize / 2, keySize, '↓');
-    this.drawKey(arrowsCenterX + keySize / 2 + keyGap, rowY - keySize / 2, keySize, '→');
-  }
-
-  drawKey(x, y, size, label, width = null) {
-    let w = width || size;
-    let r = 4;  // Corner radius
-
-    // Key background
-    stroke(PALETTE.textDim);
-    strokeWeight(1);
-    fill(PALETTE.background);
-    rect(x, y, w, size, r);
-
-    // Key label
-    if (label) {
-      fill(PALETTE.textDim);
-      noStroke();
-      textAlign(CENTER, CENTER);
-      textSize(11);
-      text(label, x + w / 2, y + size / 2);
-    }
-  }
+  // UI methods (drawScore, drawInstructions, etc.) moved to UIRenderer
 }
