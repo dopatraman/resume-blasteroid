@@ -185,6 +185,73 @@ class CollisionManager {
     }
   }
 
+  // === Plume-Asteroid Collision (Boost I) ===
+
+  checkPlumeAsteroid() {
+    if (!this.game.ship) return;
+
+    let particles = this.game.ship.thrustParticles;
+    for (let i = particles.length - 1; i >= 0; i--) {
+      let p = particles[i];
+      if (!p.isPlume) continue;  // Only plume particles
+
+      for (let j = this.game.asteroids.length - 1; j >= 0; j--) {
+        let asteroid = this.game.asteroids[j];
+        let d = dist(p.pos.x, p.pos.y, asteroid.pos.x, asteroid.pos.y);
+        let plumeRadius = 6;  // Small collision radius
+
+        if (d < asteroid.radius + plumeRadius) {
+          // Explode asteroid
+          let explosionParticles = asteroid.explode();
+          this.game.particleSystem.particles.push(...explosionParticles);
+
+          // Award points, spawn portal
+          let asteroidType = asteroid.type;
+          let asteroidPos = asteroid.pos;
+          this.game.score += 10;
+
+          this.game.asteroids.splice(j, 1);
+
+          if (asteroidType !== 'neutral') {
+            this.game.spawnPortal(asteroidPos, asteroidType);
+          }
+
+          // Remove plume particle
+          particles.splice(i, 1);
+          break;
+        }
+      }
+    }
+  }
+
+  // === Plume-Powerup Collision (Boost I) ===
+
+  checkPlumePowerup() {
+    if (!this.game.ship) return;
+
+    let particles = this.game.ship.thrustParticles;
+    for (let i = particles.length - 1; i >= 0; i--) {
+      let p = particles[i];
+      if (!p.isPlume) continue;
+
+      for (let j = this.game.powerups.length - 1; j >= 0; j--) {
+        let powerup = this.game.powerups[j];
+        let d = dist(p.pos.x, p.pos.y, powerup.pos.x, powerup.pos.y);
+        let plumeRadius = 6;
+
+        if (d < powerup.radius + plumeRadius) {
+          // Create powerup drop
+          this.game.powerupDrops.push(new PowerupDrop(powerup.pos.x, powerup.pos.y, powerup.type));
+
+          // Remove powerup and particle
+          this.game.powerups.splice(j, 1);
+          particles.splice(i, 1);
+          break;
+        }
+      }
+    }
+  }
+
   // === Geometry Helpers ===
 
   lineCircleCollision(lineStart, lineEnd, circleCenter, circleRadius) {

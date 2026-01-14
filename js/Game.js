@@ -247,6 +247,7 @@ class Game {
 
     // Check collisions via manager
     this.collisions.checkBulletAsteroid();
+    this.collisions.checkPlumeAsteroid();
     this.collisions.checkBeamAsteroid();
     this.collisions.checkShipAsteroid();
 
@@ -258,6 +259,7 @@ class Game {
     this.updatePowerups();
     this.updatePowerupDrops();
     this.collisions.checkBulletPowerup();
+    this.collisions.checkPlumePowerup();
     this.collisions.checkShipPowerupDrop();
     this.managePowerups();
 
@@ -456,6 +458,7 @@ class Game {
       case 'homing':
         // Clear other powerup types
         this.activePowerups.chargeshot = 0;
+        this.activePowerups.boost = 0;
         if (this.activePowerups.homing < 3) {
           this.activePowerups.homing++;
         }
@@ -463,13 +466,17 @@ class Game {
       case 'chargeshot':
         // Clear other powerup types
         this.activePowerups.homing = 0;
+        this.activePowerups.boost = 0;
         this.lockedTargets = [];
         if (this.activePowerups.chargeshot < 3) {
           this.activePowerups.chargeshot++;
         }
         break;
       case 'boost':
-        // Boost stacks with other powerups (doesn't clear them)
+        // Clear other powerup types
+        this.activePowerups.homing = 0;
+        this.activePowerups.chargeshot = 0;
+        this.lockedTargets = [];
         if (this.activePowerups.boost < 3) {
           this.activePowerups.boost++;
         }

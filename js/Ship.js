@@ -15,7 +15,7 @@ class Ship {
   }
 
   turn(direction, boostTier = 0) {
-    let turnMult = boostTier >= 1 ? 1.4 : 1.0;  // 40% sharper turning
+    let turnMult = boostTier >= 1 ? 1.6 : 1.0;  // 60% sharper turning
     this.rotation += this.rotationSpeed * direction * turnMult;
 
     // Track turning for swerve effect
@@ -52,13 +52,13 @@ class Ship {
     // Boost I: Add center plume particle (no spread, faster, curls outward)
     if (boostTier >= 1) {
       let plumeVel = p5.Vector.fromAngle(this.rotation + PI);  // Straight back
-      plumeVel.mult(random(3, 5));  // Shorter base plume
+      plumeVel.mult(random(2.5, 4));  // Shorter base plume
 
       this.thrustParticles.push({
         pos: particlePos.copy(),
         vel: plumeVel,
-        life: 18,
-        maxLife: 18,
+        life: 14,
+        maxLife: 14,
         color: random(['#FF6B35', '#FFE66D']),  // Orange/yellow
         isPlume: true,  // Mark for curl behavior
         curlDirection: random() < 0.5 ? 1 : -1  // Curl left or right
