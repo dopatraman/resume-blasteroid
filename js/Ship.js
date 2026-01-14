@@ -8,23 +8,31 @@ class Ship {
     this.friction = 0.99;
     this.size = SHAPES.ship.size;
     this.isThrusting = false;
+    this.isTurning = false;
+    this.turnDirection = 0;  // -1 = left, 1 = right
     this.thrustParticles = [];
     this.muzzleParticles = [];
   }
 
-  turn(direction) {
-    this.rotation += this.rotationSpeed * direction;
+  turn(direction, boostTier = 0) {
+    let turnMult = boostTier >= 1 ? 1.4 : 1.0;  // 40% sharper turning
+    this.rotation += this.rotationSpeed * direction * turnMult;
+
+    // Track turning for swerve effect
+    this.isTurning = true;
+    this.turnDirection = direction;
   }
 
-  thrust() {
+  thrust(boostTier = 0) {
     let force = p5.Vector.fromAngle(this.rotation);
-    force.mult(this.thrustPower);
+    let thrustMult = boostTier >= 1 ? 1.5 : 1.0;  // 50% faster thrust
+    force.mult(this.thrustPower * thrustMult);
     this.vel.add(force);
     this.isThrusting = true;
-    this.emitThrustParticle();
+    this.emitThrustParticle(boostTier);
   }
 
-  emitThrustParticle() {
+  emitThrustParticle(boostTier = 0) {
     // Create thrust particle behind ship
     let offset = p5.Vector.fromAngle(this.rotation + PI);
     offset.mult(this.size);
@@ -40,6 +48,43 @@ class Ship {
       maxLife: 20,
       color: random(PALETTE.particles.thrust)
     });
+
+    // Boost I: Add center plume particle (no spread, faster, curls outward)
+    if (boostTier >= 1) {
+      let plumeVel = p5.Vector.fromAngle(this.rotation + PI);  // Straight back
+      plumeVel.mult(random(3, 5));  // Shorter base plume
+
+      this.thrustParticles.push({
+        pos: particlePos.copy(),
+        vel: plumeVel,
+        life: 18,
+        maxLife: 18,
+        color: random(['#FF6B35', '#FFE66D']),  // Orange/yellow
+        isPlume: true,  // Mark for curl behavior
+        curlDirection: random() < 0.5 ? 1 : -1  // Curl left or right
+      });
+
+      // Swerve effect: emit extra particles opposite to turn direction
+      if (this.isTurning) {
+        // Emit 2-3 swerve particles for more visible effect
+        let numSwerve = floor(random(2, 4));
+        for (let i = 0; i < numSwerve; i++) {
+          let swerveAngle = this.rotation + PI + (this.turnDirection * -0.5) + random(-0.2, 0.2);
+          let swerveVel = p5.Vector.fromAngle(swerveAngle);
+          swerveVel.mult(random(5, 8));
+
+          this.thrustParticles.push({
+            pos: particlePos.copy(),
+            vel: swerveVel,
+            life: 28,
+            maxLife: 28,
+            color: random(['#FF6B35', '#FFE66D']),
+            isPlume: true,
+            curlDirection: -this.turnDirection
+          });
+        }
+      }
+    }
   }
 
   update() {
@@ -59,6 +104,8 @@ class Ship {
     this.updateParticles();
 
     this.isThrusting = false;
+    this.isTurning = false;
+    this.turnDirection = 0;
   }
 
   updateParticles() {
@@ -66,6 +113,16 @@ class Ship {
       let p = this.thrustParticles[i];
       p.pos.add(p.vel);
       p.life--;
+
+      // Plume particles curl outward as they age (mushroom effect)
+      if (p.isPlume) {
+        let age = 1 - (p.life / p.maxLife);  // 0 at start, 1 at end
+        let curlStrength = age * 0.15;  // Increases over time
+        let perpAngle = atan2(p.vel.y, p.vel.x) + HALF_PI * p.curlDirection;
+        p.vel.x += cos(perpAngle) * curlStrength;
+        p.vel.y += sin(perpAngle) * curlStrength;
+      }
+
       if (p.life <= 0) {
         this.thrustParticles.splice(i, 1);
       }
@@ -214,10 +271,35 @@ class Ship {
     // Draw thrust particles first (behind ship)
     for (let p of this.thrustParticles) {
       let alpha = map(p.life, 0, p.maxLife, 0, 255);
-      let size = map(p.life, 0, p.maxLife, 1, 4);
-      fill(red(color(p.color)), green(color(p.color)), blue(color(p.color)), alpha);
+      let c = color(p.color);
+      let r = red(c), g = green(c), b = blue(c);
       noStroke();
-      ellipse(p.pos.x, p.pos.y, size, size);
+
+      if (p.isPlume) {
+        // Plume particles: larger with glow effect
+        let size = map(p.life, 0, p.maxLife, 2, 8);
+
+        // Outer glow
+        fill(r, g, b, alpha * 0.15);
+        ellipse(p.pos.x, p.pos.y, size * 4, size * 4);
+
+        // Middle glow
+        fill(r, g, b, alpha * 0.3);
+        ellipse(p.pos.x, p.pos.y, size * 2.5, size * 2.5);
+
+        // Core
+        fill(r, g, b, alpha);
+        ellipse(p.pos.x, p.pos.y, size, size);
+
+        // White hot center
+        fill(255, 255, 255, alpha * 0.6);
+        ellipse(p.pos.x, p.pos.y, size * 0.4, size * 0.4);
+      } else {
+        // Regular spray particles
+        let size = map(p.life, 0, p.maxLife, 1, 4);
+        fill(r, g, b, alpha);
+        ellipse(p.pos.x, p.pos.y, size, size);
+      }
     }
 
     // Draw muzzle flash particles

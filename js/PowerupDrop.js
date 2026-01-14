@@ -20,6 +20,8 @@ class PowerupDrop {
         return '#FF00FF';  // Magenta
       case 'chargeshot':
         return '#00FFFF';  // Cyan
+      case 'boost':
+        return '#FF6B35';  // Orange
       default:
         return '#FF00FF';
     }
@@ -31,6 +33,8 @@ class PowerupDrop {
         return 'Homing';
       case 'chargeshot':
         return 'Charge';
+      case 'boost':
+        return 'Boost';
       default:
         return '???';
     }

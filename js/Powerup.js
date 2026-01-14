@@ -21,6 +21,8 @@ class Powerup {
         return '#FF00FF';  // Magenta
       case 'chargeshot':
         return '#00FFFF';  // Cyan
+      case 'boost':
+        return '#FF6B35';  // Orange
       default:
         return '#FF00FF';
     }
@@ -32,6 +34,8 @@ class Powerup {
         return 'H';
       case 'chargeshot':
         return 'C';
+      case 'boost':
+        return 'B';
       default:
         return '?';
     }

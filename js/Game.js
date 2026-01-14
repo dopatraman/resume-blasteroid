@@ -53,8 +53,9 @@ class Game {
     this.powerups = [];           // Floating powerup entities
     this.powerupDrops = [];       // Collectibles after shooting
     this.activePowerups = {       // Currently held powerups
-      homing: 0,            // 0 = none, 1 = Homing I, 2 = Homing II
-      chargeshot: 0         // 0 = none, 1-3 = tier level
+      homing: 0,            // 0 = none, 1 = Homing I, 2 = Homing II, 3 = Homing III
+      chargeshot: 0,        // 0 = none, 1-3 = tier level
+      boost: 0              // 0 = none, 1-3 = tier level
     };
     this.powerupSpawnTimer = 0;
     this.powerupSpawnInterval = 600;  // 10 seconds at 60fps
@@ -265,14 +266,16 @@ class Game {
   }
 
   handleInput() {
+    let boostTier = this.activePowerups.boost;
+
     if (keyIsDown(LEFT_ARROW)) {
-      this.ship.turn(-1);
+      this.ship.turn(-1, boostTier);
     }
     if (keyIsDown(RIGHT_ARROW)) {
-      this.ship.turn(1);
+      this.ship.turn(1, boostTier);
     }
     if (keyIsDown(UP_ARROW)) {
-      this.ship.thrust();
+      this.ship.thrust(boostTier);
     }
   }
 
@@ -315,6 +318,7 @@ class Game {
     // Reset all powerups on death
     this.activePowerups.homing = 0;
     this.activePowerups.chargeshot = 0;
+    this.activePowerups.boost = 0;
 
     // Clear targeting state
     this.targetedAsteroid = null;
@@ -464,6 +468,12 @@ class Game {
           this.activePowerups.chargeshot++;
         }
         break;
+      case 'boost':
+        // Boost stacks with other powerups (doesn't clear them)
+        if (this.activePowerups.boost < 3) {
+          this.activePowerups.boost++;
+        }
+        break;
     }
   }
 
@@ -472,8 +482,8 @@ class Game {
 
     // Spawn powerup periodically
     if (this.powerupSpawnTimer >= this.powerupSpawnInterval && this.powerups.length < 2) {
-      // Randomly spawn homing or chargeshot
-      let types = ['homing', 'chargeshot'];
+      // Randomly spawn homing, chargeshot, or boost
+      let types = ['homing', 'chargeshot', 'boost'];
       let type = random(types);
       this.powerups.push(Powerup.spawnFromEdge(type));
       this.powerupSpawnTimer = 0;

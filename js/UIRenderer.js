@@ -194,6 +194,14 @@ class UIRenderer {
       text('Homing ' + tierLabel, width - 20, yOffset);
       yOffset += 18;
     }
+
+    if (this.game.activePowerups.boost > 0) {
+      let c = color('#FF6B35');  // Orange
+      fill(red(c), green(c), blue(c), 200);
+      let tierLabel = this.getTierLabel(this.game.activePowerups.boost);
+      text('Boost ' + tierLabel, width - 20, yOffset);
+      yOffset += 18;
+    }
   }
 
   getTierLabel(tier) {
