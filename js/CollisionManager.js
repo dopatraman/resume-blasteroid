@@ -224,7 +224,7 @@ class CollisionManager {
     }
   }
 
-  // === Forcefield-Asteroid Collision (Boost II) ===
+  // === Forcefield-Asteroid Collision (Boost II/III) ===
 
   checkForcefieldAsteroid() {
     if (!this.game.ship) return;
@@ -232,7 +232,16 @@ class CollisionManager {
 
     let ship = this.game.ship;
     let nosePos = ship.getNosePosition();
-    let arcRadius = ship.forcefieldRadius * 1.2;  // Match render size
+
+    // Boost III: Wider (180°) and flatter (larger radius)
+    let arcRadius, arcAngle;
+    if (ship.boostTier >= 3) {
+      arcRadius = ship.forcefieldRadius * 1.8;
+      arcAngle = PI * 90 / 180;  // 90 degrees each side
+    } else {
+      arcRadius = ship.forcefieldRadius * 1.2;
+      arcAngle = PI * 75 / 180;  // 75 degrees each side
+    }
 
     for (let j = this.game.asteroids.length - 1; j >= 0; j--) {
       let asteroid = this.game.asteroids[j];
@@ -244,14 +253,13 @@ class CollisionManager {
       // Check distance (within arc radius + asteroid radius)
       if (distance > arcRadius + asteroid.radius) continue;
 
-      // Check angle (within 75 degrees of ship facing direction)
+      // Check angle
       let angleToAsteroid = atan2(toAsteroid.y, toAsteroid.x);
       let angleDiff = abs(angleToAsteroid - ship.rotation);
       // Normalize angle difference
       if (angleDiff > PI) angleDiff = TWO_PI - angleDiff;
 
-      let arcAngle = PI * 75 / 180;  // 75 degrees
-      if (angleDiff < arcAngle) {  // Within 75 degree cone
+      if (angleDiff < arcAngle) {
         // Destroy asteroid
         let explosionParticles = asteroid.explode();
         this.game.particleSystem.particles.push(...explosionParticles);
@@ -264,6 +272,45 @@ class CollisionManager {
 
         if (asteroidType !== 'neutral') {
           this.game.spawnPortal(asteroidPos, asteroidType);
+        }
+      }
+    }
+  }
+
+  // === Echo-Asteroid Collision (Boost III) ===
+
+  checkEchoAsteroid() {
+    for (let echo of this.game.echoes) {
+      for (let j = this.game.asteroids.length - 1; j >= 0; j--) {
+        let asteroid = this.game.asteroids[j];
+
+        // Check if asteroid is within the arc
+        let toAsteroid = p5.Vector.sub(asteroid.pos, echo.pos);
+        let distance = toAsteroid.mag();
+
+        // Check distance (within arc radius + asteroid radius)
+        if (distance > echo.arcRadius + asteroid.radius) continue;
+
+        // Check angle (within 90 degrees of echo facing direction)
+        let angleToAsteroid = atan2(toAsteroid.y, toAsteroid.x);
+        let angleDiff = abs(angleToAsteroid - echo.rotation);
+        // Normalize angle difference
+        if (angleDiff > PI) angleDiff = TWO_PI - angleDiff;
+
+        if (angleDiff < echo.arcAngle) {
+          // Destroy asteroid
+          let explosionParticles = asteroid.explode();
+          this.game.particleSystem.particles.push(...explosionParticles);
+
+          let asteroidType = asteroid.type;
+          let asteroidPos = asteroid.pos;
+          this.game.score += 10;
+
+          this.game.asteroids.splice(j, 1);
+
+          if (asteroidType !== 'neutral') {
+            this.game.spawnPortal(asteroidPos, asteroidType);
+          }
         }
       }
     }

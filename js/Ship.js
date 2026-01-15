@@ -24,6 +24,9 @@ class Ship {
     // Boost II - Jolt (temporary speed boost from Spot Boost)
     this.joltMultiplier = 1.0;
     this.joltActive = false;
+
+    // Boost III - Track current boost tier for rendering
+    this.boostTier = 0;
   }
 
   turn(direction, boostTier = 0) {
@@ -216,7 +219,7 @@ class Ship {
 
   // === Boost II Methods ===
 
-  spotBoost() {
+  spotBoost(boostTier = 2) {
     // One-time velocity impulse in facing direction
     let impulse = p5.Vector.fromAngle(this.rotation);
     impulse.mult(5);  // Burst strength
@@ -235,6 +238,17 @@ class Ship {
 
     // Emit particle burst
     this.emitSpotBoostParticles();
+
+    // Boost III: Return Echo data for game to spawn
+    if (boostTier >= 3) {
+      return {
+        pos: this.getNosePosition(),
+        rotation: this.rotation,
+        vel: p5.Vector.fromAngle(this.rotation).mult(8),  // Echo speed
+        shipSize: this.size
+      };
+    }
+    return null;
   }
 
   emitSpotBoostParticles() {
@@ -476,6 +490,39 @@ class Ship {
     translate(this.pos.x, this.pos.y);
     rotate(this.rotation);
 
+    // Boost III: Neon green ship glow during Surge Mode
+    if (this.boostTier >= 3 && this.forcefieldAlpha > 0) {
+      let glowAlpha = this.forcefieldAlpha;
+      noFill();
+
+      // Outer glow (neon green - same as ship color)
+      stroke(0, 255, 65, glowAlpha * 0.15);
+      strokeWeight(14);
+      triangle(
+        this.size, 0,
+        -this.size * 0.5, -this.size * 0.65,
+        -this.size * 0.5, this.size * 0.65
+      );
+
+      // Middle glow
+      stroke(0, 255, 65, glowAlpha * 0.3);
+      strokeWeight(8);
+      triangle(
+        this.size, 0,
+        -this.size * 0.5, -this.size * 0.65,
+        -this.size * 0.5, this.size * 0.65
+      );
+
+      // Inner glow
+      stroke(0, 255, 65, glowAlpha * 0.5);
+      strokeWeight(4);
+      triangle(
+        this.size, 0,
+        -this.size * 0.5, -this.size * 0.65,
+        -this.size * 0.5, this.size * 0.65
+      );
+    }
+
     // Draw ship body
     fill(PALETTE.background);
     stroke(PALETTE.ship);
@@ -511,17 +558,32 @@ class Ship {
     let alpha = this.forcefieldAlpha;
     let nosePos = this.getNosePosition();
 
-    // Arc in front of ship (150° total, 75° each side)
-    let arcRadius = this.forcefieldRadius * 1.2;  // Slightly larger
-    let arcAngle = PI * 75 / 180;  // 75 degrees each side
+    // Boost III: Wider (180°) and flatter (larger radius)
+    // Boost II: 150° arc
+    let arcAngle, arcRadius;
+    if (this.boostTier >= 3) {
+      arcAngle = PI * 90 / 180;  // 90 degrees each side = 180° total
+      arcRadius = this.forcefieldRadius * 1.8;  // Flatter = larger radius
+    } else {
+      arcAngle = PI * 75 / 180;  // 75 degrees each side = 150° total
+      arcRadius = this.forcefieldRadius * 1.2;
+    }
+
     let arcStart = this.rotation - arcAngle;
     let arcEnd = this.rotation + arcAngle;
 
     push();
     translate(nosePos.x, nosePos.y);
+    noFill();
+
+    // Boost III: Extra outer glow
+    if (this.boostTier >= 3) {
+      stroke(0, 255, 255, alpha * 0.1);
+      strokeWeight(20);
+      arc(0, 0, arcRadius * 2, arcRadius * 2, arcStart, arcEnd);
+    }
 
     // Outer glow
-    noFill();
     stroke(0, 255, 255, alpha * 0.2);
     strokeWeight(12);
     arc(0, 0, arcRadius * 2, arcRadius * 2, arcStart, arcEnd);

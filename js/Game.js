@@ -72,6 +72,9 @@ class Game {
     this.beams = [];
     // beamParticles moved to ParticleSystem
 
+    // Boost III - Echoes
+    this.echoes = [];
+
     // Boost II - Double-tap detection
     this.lastThrustPressTime = 0;
     this.doubleTapWindow = 250;  // ms
@@ -250,10 +253,14 @@ class Game {
     this.updateBeams();
     this.updateBeamParticles();
 
+    // Update echoes (Boost III)
+    this.updateEchoes();
+
     // Check collisions via manager
     this.collisions.checkBulletAsteroid();
     this.collisions.checkPlumeAsteroid();
     this.collisions.checkForcefieldAsteroid();
+    this.collisions.checkEchoAsteroid();
     this.collisions.checkBeamAsteroid();
     this.collisions.checkShipAsteroid();
 
@@ -275,6 +282,9 @@ class Game {
 
   handleInput() {
     let boostTier = this.activePowerups.boost;
+
+    // Update ship's boostTier for rendering
+    this.ship.boostTier = boostTier;
 
     if (keyIsDown(LEFT_ARROW)) {
       this.ship.turn(-1, boostTier);
@@ -840,11 +850,18 @@ class Game {
     if (this.state !== GameState.PLAYING || !this.ship) return;
     if (this.activePowerups.boost < 2) return;  // Need Boost II
 
+    let boostTier = this.activePowerups.boost;
+
     let now = millis();
     if (now - this.lastThrustPressTime < this.doubleTapWindow) {
       // Double-tap detected!
-      this.ship.spotBoost();
+      let echoData = this.ship.spotBoost(boostTier);
       this.thrustHeldAfterDoubleTap = true;
+
+      // Boost III: Spawn Echo projectile
+      if (echoData) {
+        this.echoes.push(new Echo(echoData.pos.x, echoData.pos.y, echoData.rotation, echoData.vel, echoData.shipSize));
+      }
 
       // Activate forcefield if still holding
       if (keyIsDown(UP_ARROW)) {
@@ -1223,6 +1240,15 @@ class Game {
     }
   }
 
+  updateEchoes() {
+    for (let i = this.echoes.length - 1; i >= 0; i--) {
+      this.echoes[i].update();
+      if (this.echoes[i].isDead()) {
+        this.echoes.splice(i, 1);
+      }
+    }
+  }
+
   renderBeamParticles() {
     for (let p of this.particleSystem.beamParticles) {
       let alpha = map(p.life, 0, p.maxLife, 0, 255);
@@ -1420,6 +1446,11 @@ class Game {
     // Draw beams (ChargeShot III)
     this.renderBeams();
     this.renderBeamParticles();
+
+    // Draw echoes (Boost III)
+    for (let echo of this.echoes) {
+      echo.render();
+    }
 
     // Draw fire rings
     this.renderFireRings();
