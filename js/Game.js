@@ -72,6 +72,11 @@ class Game {
     this.beams = [];
     // beamParticles moved to ParticleSystem
 
+    // Boost II - Double-tap detection
+    this.lastThrustPressTime = 0;
+    this.doubleTapWindow = 250;  // ms
+    this.thrustHeldAfterDoubleTap = false;
+
     // Intro animation state
     this.introTimer = 0;
     // introParticles moved to ParticleSystem
@@ -248,6 +253,7 @@ class Game {
     // Check collisions via manager
     this.collisions.checkBulletAsteroid();
     this.collisions.checkPlumeAsteroid();
+    this.collisions.checkForcefieldAsteroid();
     this.collisions.checkBeamAsteroid();
     this.collisions.checkShipAsteroid();
 
@@ -272,9 +278,17 @@ class Game {
 
     if (keyIsDown(LEFT_ARROW)) {
       this.ship.turn(-1, boostTier);
+      // Boost II: Turning breaks forcefield
+      if (this.ship.forcefieldActive) {
+        this.ship.deactivateForcefield();
+      }
     }
     if (keyIsDown(RIGHT_ARROW)) {
       this.ship.turn(1, boostTier);
+      // Boost II: Turning breaks forcefield
+      if (this.ship.forcefieldActive) {
+        this.ship.deactivateForcefield();
+      }
     }
     if (keyIsDown(UP_ARROW)) {
       this.ship.thrust(boostTier);
@@ -819,6 +833,33 @@ class Game {
     this.isCharging = false;
     this.chargeLevel = 0;
     this.particleSystem.chargeParticles = [];
+  }
+
+  // Boost II: Handle thrust key press for double-tap detection
+  thrustPressed() {
+    if (this.state !== GameState.PLAYING || !this.ship) return;
+    if (this.activePowerups.boost < 2) return;  // Need Boost II
+
+    let now = millis();
+    if (now - this.lastThrustPressTime < this.doubleTapWindow) {
+      // Double-tap detected!
+      this.ship.spotBoost();
+      this.thrustHeldAfterDoubleTap = true;
+
+      // Activate forcefield if still holding
+      if (keyIsDown(UP_ARROW)) {
+        this.ship.activateForcefield();
+      }
+    }
+    this.lastThrustPressTime = now;
+  }
+
+  // Boost II: Handle thrust key release
+  thrustReleased() {
+    if (this.ship && this.ship.forcefieldActive) {
+      this.ship.deactivateForcefield();
+    }
+    this.thrustHeldAfterDoubleTap = false;
   }
 
   updateCharging() {

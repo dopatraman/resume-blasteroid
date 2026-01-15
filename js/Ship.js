@@ -12,6 +12,18 @@ class Ship {
     this.turnDirection = 0;  // -1 = left, 1 = right
     this.thrustParticles = [];
     this.muzzleParticles = [];
+
+    // Boost II - Spot boost afterimages
+    this.afterimages = [];
+
+    // Boost II - Forcefield
+    this.forcefieldActive = false;
+    this.forcefieldAlpha = 0;
+    this.forcefieldRadius = this.size * 1.5;
+
+    // Boost II - Jolt (temporary speed boost from Spot Boost)
+    this.joltMultiplier = 1.0;
+    this.joltActive = false;
   }
 
   turn(direction, boostTier = 0) {
@@ -25,7 +37,15 @@ class Ship {
 
   thrust(boostTier = 0) {
     let force = p5.Vector.fromAngle(this.rotation);
-    let thrustMult = boostTier >= 1 ? 1.5 : 1.0;  // 50% faster thrust
+    // Jolt (5x decaying), Surge Mode: 3.5x, Boost I: 1.5x, Base: 1x
+    let thrustMult = 1.0;
+    if (this.joltActive) {
+      thrustMult = this.joltMultiplier;  // 5x decaying to 3.5x
+    } else if (this.forcefieldActive) {
+      thrustMult = 3.5;  // Surge Mode
+    } else if (boostTier >= 1) {
+      thrustMult = 1.5;  // Boost I
+    }
     force.mult(this.thrustPower * thrustMult);
     this.vel.add(force);
     this.isThrusting = true;
@@ -84,6 +104,31 @@ class Ship {
           });
         }
       }
+
+      // Surge Mode: Enhanced thrust trail when forcefield active
+      if (this.forcefieldActive) {
+        // Emit 2-3 enhanced particles per frame
+        let numSurge = floor(random(2, 4));
+        for (let i = 0; i < numSurge; i++) {
+          let surgeVel = p5.Vector.fromAngle(this.rotation + PI + random(-0.2, 0.2));
+          surgeVel.mult(random(6, 10));  // Faster than Boost I
+
+          // 30% white, 70% orange/yellow
+          let isWhite = random() < 0.3;
+          let surgeColor = isWhite ? '#FFFFFF' : random(['#FF6B35', '#FFE66D']);
+
+          this.thrustParticles.push({
+            pos: particlePos.copy(),
+            vel: surgeVel,
+            life: 35,  // Longer than Boost I
+            maxLife: 35,
+            color: surgeColor,
+            isPlume: true,
+            isWhite: isWhite,
+            curlDirection: random() < 0.5 ? 1 : -1
+          });
+        }
+      }
     }
   }
 
@@ -137,6 +182,29 @@ class Ship {
         this.muzzleParticles.splice(i, 1);
       }
     }
+
+    // Update afterimages (fade out quickly)
+    for (let i = this.afterimages.length - 1; i >= 0; i--) {
+      this.afterimages[i].alpha -= 20;  // Quick fade (~0.2s)
+      if (this.afterimages[i].alpha <= 0) {
+        this.afterimages.splice(i, 1);
+      }
+    }
+
+    // Update forcefield alpha
+    if (this.forcefieldActive) {
+      this.forcefieldAlpha = min(this.forcefieldAlpha + 25, 255);
+    } else {
+      this.forcefieldAlpha = max(this.forcefieldAlpha - 15, 0);  // Graceful fade
+    }
+
+    // Update jolt decay (5x → 3.5x over 30 frames)
+    if (this.joltActive) {
+      this.joltMultiplier = max(3.5, this.joltMultiplier - (1.5 / 30));
+      if (this.joltMultiplier <= 3.5) {
+        this.joltActive = false;
+      }
+    }
   }
 
   wrapEdges() {
@@ -144,6 +212,65 @@ class Ship {
     if (this.pos.x < -this.size) this.pos.x = width + this.size;
     if (this.pos.y > height + this.size) this.pos.y = -this.size;
     if (this.pos.y < -this.size) this.pos.y = height + this.size;
+  }
+
+  // === Boost II Methods ===
+
+  spotBoost() {
+    // One-time velocity impulse in facing direction
+    let impulse = p5.Vector.fromAngle(this.rotation);
+    impulse.mult(5);  // Burst strength
+    this.vel.add(impulse);
+
+    // Activate jolt - 5x multiplier that decays to 3.5x over ~0.5s
+    this.joltMultiplier = 5.0;
+    this.joltActive = true;
+
+    // Store current position for afterimage
+    this.afterimages.push({
+      pos: this.pos.copy(),
+      rotation: this.rotation,
+      alpha: 255
+    });
+
+    // Emit particle burst
+    this.emitSpotBoostParticles();
+  }
+
+  emitSpotBoostParticles() {
+    // Dramatic burst of particles behind ship
+    let offset = p5.Vector.fromAngle(this.rotation + PI);
+    offset.mult(this.size);
+    let burstPos = p5.Vector.add(this.pos, offset);
+
+    for (let i = 0; i < 25; i++) {
+      let angle = this.rotation + PI + random(-1.0, 1.0);
+      let speed = random(6, 14);
+      let vel = p5.Vector.fromAngle(angle).mult(speed);
+
+      // 30% white dazzling particles, 70% orange/yellow
+      let isWhite = random() < 0.3;
+      let particleColor = isWhite ? '#FFFFFF' : random(['#FF6B35', '#FFE66D', '#FFA500']);
+
+      this.thrustParticles.push({
+        pos: burstPos.copy(),
+        vel: vel,
+        life: 25,
+        maxLife: 25,
+        color: particleColor,
+        isPlume: true,
+        isWhite: isWhite,
+        curlDirection: random() < 0.5 ? 1 : -1
+      });
+    }
+  }
+
+  activateForcefield() {
+    this.forcefieldActive = true;
+  }
+
+  deactivateForcefield() {
+    this.forcefieldActive = false;
   }
 
   getNosePosition() {
@@ -326,6 +453,25 @@ class Ship {
       ellipse(p.pos.x, p.pos.y, p.size, p.size);
     }
 
+    // Draw afterimages (Boost II spot boost)
+    for (let img of this.afterimages) {
+      push();
+      translate(img.pos.x, img.pos.y);
+      rotate(img.rotation);
+
+      // Ghost ship outline
+      noFill();
+      stroke(255, 165, 0, img.alpha * 0.6);  // Orange ghost
+      strokeWeight(1);
+      triangle(
+        this.size, 0,
+        -this.size * 0.5, -this.size * 0.65,
+        -this.size * 0.5, this.size * 0.65
+      );
+
+      pop();
+    }
+
     push();
     translate(this.pos.x, this.pos.y);
     rotate(this.rotation);
@@ -352,6 +498,48 @@ class Ship {
       vertex(-this.size * 0.5, this.size * 0.2);
       endShape(CLOSE);
     }
+
+    pop();
+
+    // Draw forcefield (Boost II)
+    if (this.forcefieldAlpha > 0) {
+      this.renderForcefield();
+    }
+  }
+
+  renderForcefield() {
+    let alpha = this.forcefieldAlpha;
+    let nosePos = this.getNosePosition();
+
+    // Arc in front of ship (150° total, 75° each side)
+    let arcRadius = this.forcefieldRadius * 1.2;  // Slightly larger
+    let arcAngle = PI * 75 / 180;  // 75 degrees each side
+    let arcStart = this.rotation - arcAngle;
+    let arcEnd = this.rotation + arcAngle;
+
+    push();
+    translate(nosePos.x, nosePos.y);
+
+    // Outer glow
+    noFill();
+    stroke(0, 255, 255, alpha * 0.2);
+    strokeWeight(12);
+    arc(0, 0, arcRadius * 2, arcRadius * 2, arcStart, arcEnd);
+
+    // Middle glow
+    stroke(0, 255, 255, alpha * 0.4);
+    strokeWeight(6);
+    arc(0, 0, arcRadius * 2, arcRadius * 2, arcStart, arcEnd);
+
+    // Core arc
+    stroke(0, 255, 255, alpha * 0.8);
+    strokeWeight(2);
+    arc(0, 0, arcRadius * 2, arcRadius * 2, arcStart, arcEnd);
+
+    // Bright inner edge
+    stroke(255, 255, 255, alpha * 0.5);
+    strokeWeight(1);
+    arc(0, 0, arcRadius * 1.8, arcRadius * 1.8, arcStart, arcEnd);
 
     pop();
   }

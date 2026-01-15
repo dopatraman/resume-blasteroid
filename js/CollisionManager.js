@@ -224,6 +224,51 @@ class CollisionManager {
     }
   }
 
+  // === Forcefield-Asteroid Collision (Boost II) ===
+
+  checkForcefieldAsteroid() {
+    if (!this.game.ship) return;
+    if (this.game.ship.forcefieldAlpha <= 0) return;
+
+    let ship = this.game.ship;
+    let nosePos = ship.getNosePosition();
+    let arcRadius = ship.forcefieldRadius * 1.2;  // Match render size
+
+    for (let j = this.game.asteroids.length - 1; j >= 0; j--) {
+      let asteroid = this.game.asteroids[j];
+
+      // Check if asteroid is within the arc in front of ship
+      let toAsteroid = p5.Vector.sub(asteroid.pos, nosePos);
+      let distance = toAsteroid.mag();
+
+      // Check distance (within arc radius + asteroid radius)
+      if (distance > arcRadius + asteroid.radius) continue;
+
+      // Check angle (within 75 degrees of ship facing direction)
+      let angleToAsteroid = atan2(toAsteroid.y, toAsteroid.x);
+      let angleDiff = abs(angleToAsteroid - ship.rotation);
+      // Normalize angle difference
+      if (angleDiff > PI) angleDiff = TWO_PI - angleDiff;
+
+      let arcAngle = PI * 75 / 180;  // 75 degrees
+      if (angleDiff < arcAngle) {  // Within 75 degree cone
+        // Destroy asteroid
+        let explosionParticles = asteroid.explode();
+        this.game.particleSystem.particles.push(...explosionParticles);
+
+        let asteroidType = asteroid.type;
+        let asteroidPos = asteroid.pos;
+        this.game.score += 10;
+
+        this.game.asteroids.splice(j, 1);
+
+        if (asteroidType !== 'neutral') {
+          this.game.spawnPortal(asteroidPos, asteroidType);
+        }
+      }
+    }
+  }
+
   // === Plume-Powerup Collision (Boost I) ===
 
   checkPlumePowerup() {

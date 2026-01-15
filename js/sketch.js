@@ -17,6 +17,11 @@ function keyPressed() {
     return false;  // Prevent page scroll
   }
 
+  // UP_ARROW for Boost II double-tap
+  if (keyCode === UP_ARROW) {
+    game.thrustPressed();
+  }
+
   // ESC to return to game from section
   if (keyCode === ESCAPE && game.state === GameState.SECTION) {
     game.returnToGame();
@@ -26,6 +31,11 @@ function keyPressed() {
 function keyReleased() {
   if (key === ' ' || keyCode === 32) {
     game.releaseCharge();
+  }
+
+  // UP_ARROW release for Boost II forcefield
+  if (keyCode === UP_ARROW) {
+    game.thrustReleased();
   }
 }
 
