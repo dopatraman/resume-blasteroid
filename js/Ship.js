@@ -131,6 +131,27 @@ class Ship {
             curlDirection: random() < 0.5 ? 1 : -1
           });
         }
+
+        // Boost III: Flame Afterburner - large billowing flame bursts
+        if (boostTier >= 3 && frameCount % 3 === 0) {
+          // Spawn 1-2 large flame burst particles
+          let numBursts = floor(random(1, 3));
+          for (let i = 0; i < numBursts; i++) {
+            let burstVel = p5.Vector.fromAngle(this.rotation + PI + random(-0.4, 0.4));
+            burstVel.mult(random(3, 5));  // Slower than regular particles
+
+            this.thrustParticles.push({
+              pos: particlePos.copy(),
+              vel: burstVel,
+              life: 55,  // Much longer lasting
+              maxLife: 55,
+              color: random(['#FF6B35', '#FFE66D', '#FFA500']),  // Orange/yellow
+              isPlume: true,
+              isAfterburner: true,  // Mark for special rendering
+              curlDirection: random() < 0.5 ? 1 : -1
+            });
+          }
+        }
       }
     }
   }
@@ -244,7 +265,7 @@ class Ship {
       return {
         pos: this.getNosePosition(),
         rotation: this.rotation,
-        vel: p5.Vector.fromAngle(this.rotation).mult(8),  // Echo speed
+        vel: p5.Vector.fromAngle(this.rotation).mult(12),  // Faster Echo speed
         shipSize: this.size
       };
     }
@@ -418,7 +439,9 @@ class Ship {
 
       if (p.isPlume) {
         // Plume particles: larger with glow effect
-        let size = map(p.life, 0, p.maxLife, 2, 8);
+        // Afterburner particles are 2.5x larger
+        let baseSize = p.isAfterburner ? map(p.life, 0, p.maxLife, 5, 20) : map(p.life, 0, p.maxLife, 2, 8);
+        let size = baseSize;
 
         // Outer glow
         fill(r, g, b, alpha * 0.15);
@@ -558,12 +581,12 @@ class Ship {
     let alpha = this.forcefieldAlpha;
     let nosePos = this.getNosePosition();
 
-    // Boost III: Wider (180°) and flatter (larger radius)
+    // Boost III: Wider (180°) and much flatter (larger radius)
     // Boost II: 150° arc
     let arcAngle, arcRadius;
     if (this.boostTier >= 3) {
       arcAngle = PI * 90 / 180;  // 90 degrees each side = 180° total
-      arcRadius = this.forcefieldRadius * 1.8;  // Flatter = larger radius
+      arcRadius = this.forcefieldRadius * 2.5;  // Much flatter = larger radius
     } else {
       arcAngle = PI * 75 / 180;  // 75 degrees each side = 150° total
       arcRadius = this.forcefieldRadius * 1.2;

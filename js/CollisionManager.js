@@ -233,10 +233,10 @@ class CollisionManager {
     let ship = this.game.ship;
     let nosePos = ship.getNosePosition();
 
-    // Boost III: Wider (180°) and flatter (larger radius)
+    // Boost III: Wider (180°) and much flatter (larger radius)
     let arcRadius, arcAngle;
     if (ship.boostTier >= 3) {
-      arcRadius = ship.forcefieldRadius * 1.8;
+      arcRadius = ship.forcefieldRadius * 2.5;  // Match renderForcefield
       arcAngle = PI * 90 / 180;  // 90 degrees each side
     } else {
       arcRadius = ship.forcefieldRadius * 1.2;

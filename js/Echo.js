@@ -11,7 +11,7 @@ class Echo {
 
     // Arc properties (match Boost III forcefield exactly)
     this.arcAngle = PI * 90 / 180;  // 90 degrees each side = 180° total
-    this.arcRadius = shipSize * 1.5 * 1.8;  // Same as forcefield: size * 1.5 * 1.8
+    this.arcRadius = shipSize * 1.5 * 2.5;  // Same as forcefield: size * 1.5 * 2.5
 
     // Lifecycle - fast decay (~0.5-0.75s)
     this.life = 40;  // ~0.67 seconds at 60fps
