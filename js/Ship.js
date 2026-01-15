@@ -27,6 +27,9 @@ class Ship {
 
     // Boost III - Track current boost tier for rendering
     this.boostTier = 0;
+
+    // Boost III - Afterburner cooldown (persists briefly after Surge Mode ends)
+    this.afterburnerCooldown = 0;
   }
 
   turn(direction, boostTier = 0) {
@@ -131,26 +134,64 @@ class Ship {
             curlDirection: random() < 0.5 ? 1 : -1
           });
         }
+      }
 
-        // Boost III: Flame Afterburner - large billowing flame bursts
-        if (boostTier >= 3 && frameCount % 3 === 0) {
-          // Spawn 1-2 large flame burst particles
-          let numBursts = floor(random(1, 3));
-          for (let i = 0; i < numBursts; i++) {
-            let burstVel = p5.Vector.fromAngle(this.rotation + PI + random(-0.4, 0.4));
-            burstVel.mult(random(3, 5));  // Slower than regular particles
+      // Boost III: Flame Afterburner - large billowing flame bursts
+      // Spawns during Surge Mode OR during afterburner cooldown (turning out of Surge)
+      if (boostTier >= 3 && (this.forcefieldActive || this.afterburnerCooldown > 0) && frameCount % 3 === 0) {
+        // Spawn 1-2 large flame burst particles
+        let numBursts = floor(random(1, 3));
+        for (let i = 0; i < numBursts; i++) {
+          let burstVel = p5.Vector.fromAngle(this.rotation + PI + random(-0.4, 0.4));
+          burstVel.mult(random(3, 5));  // Slower than regular particles
 
-            this.thrustParticles.push({
-              pos: particlePos.copy(),
-              vel: burstVel,
-              life: 55,  // Much longer lasting
-              maxLife: 55,
-              color: random(['#FF6B35', '#FFE66D', '#FFA500']),  // Orange/yellow
-              isPlume: true,
-              isAfterburner: true,  // Mark for special rendering
-              curlDirection: random() < 0.5 ? 1 : -1
-            });
-          }
+          this.thrustParticles.push({
+            pos: particlePos.copy(),
+            vel: burstVel,
+            life: 55,  // Much longer lasting
+            maxLife: 55,
+            color: random(['#FF6B35', '#FFE66D', '#FFA500']),  // Orange/yellow
+            isPlume: true,
+            isAfterburner: true,  // Mark for special rendering
+            curlDirection: random() < 0.5 ? 1 : -1
+          });
+        }
+      }
+
+      // Boost III: Plasma Jets - cyan/green side exhausts when turning out of Surge Mode
+      if (boostTier >= 3 && this.afterburnerCooldown > 0) {
+        // Left jet (30° left of thrust direction)
+        for (let i = 0; i < floor(random(2, 4)); i++) {
+          let leftAngle = this.rotation + PI - (PI / 6) + random(-0.15, 0.15);  // 30° left
+          let leftVel = p5.Vector.fromAngle(leftAngle);
+          leftVel.mult(random(8, 12));
+
+          this.thrustParticles.push({
+            pos: particlePos.copy(),
+            vel: leftVel,
+            life: random(20, 30),
+            maxLife: 30,
+            color: random(['#FFFFFF', '#E8F4FF', '#D0E8FF']),  // White-hot to blue
+            isPlume: true,
+            curlDirection: -1
+          });
+        }
+
+        // Right jet (30° right of thrust direction)
+        for (let i = 0; i < floor(random(2, 4)); i++) {
+          let rightAngle = this.rotation + PI + (PI / 6) + random(-0.15, 0.15);  // 30° right
+          let rightVel = p5.Vector.fromAngle(rightAngle);
+          rightVel.mult(random(8, 12));
+
+          this.thrustParticles.push({
+            pos: particlePos.copy(),
+            vel: rightVel,
+            life: random(20, 30),
+            maxLife: 30,
+            color: random(['#FFFFFF', '#E8F4FF', '#D0E8FF']),  // White-hot to blue
+            isPlume: true,
+            curlDirection: 1
+          });
         }
       }
     }
@@ -229,6 +270,11 @@ class Ship {
         this.joltActive = false;
       }
     }
+
+    // Update afterburner cooldown (Boost III)
+    if (this.afterburnerCooldown > 0) {
+      this.afterburnerCooldown--;
+    }
   }
 
   wrapEdges() {
@@ -305,6 +351,10 @@ class Ship {
   }
 
   deactivateForcefield() {
+    // Boost III: Keep afterburner going briefly after Surge Mode ends
+    if (this.boostTier >= 3 && this.forcefieldActive) {
+      this.afterburnerCooldown = 25;  // ~0.4 seconds of afterburner
+    }
     this.forcefieldActive = false;
   }
 
@@ -440,7 +490,12 @@ class Ship {
       if (p.isPlume) {
         // Plume particles: larger with glow effect
         // Afterburner particles are 2.5x larger
-        let baseSize = p.isAfterburner ? map(p.life, 0, p.maxLife, 5, 20) : map(p.life, 0, p.maxLife, 2, 8);
+        let baseSize;
+        if (p.isAfterburner) {
+          baseSize = map(p.life, 0, p.maxLife, 5, 20);
+        } else {
+          baseSize = map(p.life, 0, p.maxLife, 2, 8);
+        }
         let size = baseSize;
 
         // Outer glow
