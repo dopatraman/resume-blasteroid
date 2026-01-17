@@ -1,0 +1,147 @@
+{
+    "name": "Prakash Venkat",
+    "phone": "(848) 219-6080",
+    "email": "prakash@asanet.com",
+    "location": "Los Angeles, CA",
+    "title": "Programmer",
+    "description": "I build things with computers. I'm always looking for a challenging problem that lets me push new limits on what computation is and can be used for.",
+    "skills": {
+        "Languages": ["Java", "Python", "Rust", "C#", "TypeScript", "JavaScript"],
+        "Frontend": ["React", "Ember", "Angular", "RxJS"],
+        "Backend": ["Django", "Spring Boot", "Ruby on Rails", "GraphQL"],
+        "Data": ["Postgres"],
+        "Mobile": ["iOS / Swift"],
+        "DevOps": ["Docker"]
+    },
+    "experiences": [
+        {
+            "company_name": "Artium AI",
+            "title": "Staff Software Engineer",
+            "from": "Jan 2026",
+            "to": "Present",
+            "location": "Los Angeles, CA",
+            "description": "Helping clients across industries adopt and implement AI solutions, from LLM-powered products to ML pipelines.",
+            "bullets": [],
+            "projects": []
+        },
+        {
+            "company_name": "AuditBoard Inc",
+            "title": "Senior Tech Lead",
+            "from": "Mar 2023",
+            "to": "Dec 2025",
+            "location": "Remote",
+            "description": "Developed software for auditors while leading a team of five engineers.",
+            "bullets": [
+                "Led discovery sessions with auditors and compliance teams to gather feedback on Third Party Risk Management prototypes, iterating with product and design to deliver vendor assessment workflows that met SOX and internal audit requirements.",
+                "Designed database schema changes to model third-party vendor risk assessments, control testing, and compliance workflows; codified data model changes in Engineering Design Documents for cross-team review. Built with Ember, C#, and Python.",
+                "Broke down TPRM features into user stories, allocated epics to a team of seven engineers, and used LaunchDarkly to orchestrate percentage-based rollouts to enterprise audit teams."
+            ],
+            "projects": []
+        },
+        {
+            "company_name": "Carbon Five",
+            "title": "Senior Principal Engineer",
+            "from": "Mar 2018",
+            "to": "Mar 2023",
+            "location": "Santa Monica, CA",
+            "description": "Built products for clients ranging from garage start up to large enterprise. Shipped software written in many different languages and tech stacks. Mentored junior engineers and helped them reach their career goals. Led all of our technical screens for new candidates and refined our interview process.",
+            "bullets": [
+                "Partnered with clients from blockchain startups to NBC/Rotten Tomatoes to define MVP scope, conducted stakeholder meetings to determine requirements, and delivered production-ready products across diverse domains including media, fintech, health tech, and hospitality.",
+                {
+                    "text": "Solved unique technical challenges across client engagements:",
+                    "subBullets": [
+                        "Built a Decentralized Social Network Protocol in Rust/Substrate for Project Liberty",
+                        "Optimized Rotten Tomatoes data ingestion from 2 hours to 2 minutes using Java concurrency",
+                        "Extended an in-house DSL with Boolean operators for Shaklee's DNA-to-supplement matching",
+                        "Delivered GDPR/CCPA-compliant audit logging for Sensei's wellness platform"
+                    ]
+                },
+                "Led cross-functional teams of up to 15 engineers and designers, conducted daily standups and weekly sprint planning, and mentored junior engineers while refining Carbon Five's technical interview process."
+            ],
+            "projects": []
+        },
+        {
+            "company_name": "Aspiration",
+            "title": "Software Engineer",
+            "from": "Mar 2016",
+            "to": "Mar 2018",
+            "location": "Marina Del Rey, CA",
+            "description": "Number 4 engineering hire at a financial technology startup whose mandate was a sustainable online banking product.",
+            "bullets": [
+                "As an early engineering hire (#4), shaped the product roadmap for a sustainable online banking platform, collaborating closely with leadership to build core banking features from the ground up.",
+                {
+                    "text": "Built critical banking infrastructure:",
+                    "subBullets": [
+                        "Designed a batch processing system to ingest ACH files from partner banks with a flexible formatter that adapted to schema changes",
+                        "Created a check payments application enabling users to issue and deposit checks on recurring intervals",
+                        "Transitioned authentication from JWTs to session cookies using Spring Auth"
+                    ]
+                },
+                "Instilled engineering best practices by revamping the code review process with PR size limits and approval requirements, establishing retrospectives, and creating developer onboarding scripts to prepare new hire workstations."
+            ],
+            "projects": []
+        },
+        {
+            "company_name": "Kargo",
+            "title": "Software Engineer",
+            "from": "Jan 2015",
+            "to": "Mar 2016",
+            "location": "New York, NY",
+            "description": "Created a photoshop-like GUI for creating interactive ads.",
+            "bullets": [
+                "Worked with Sales teams to understand the needs of interactive artists, developing a training program to onboard new users to the ad creation platform.",
+                {
+                    "text": "Built a Photoshop-like WYSIWYG editor for creating interactive advertisements:",
+                    "subBullets": [
+                        "Designed the editor in Angular 2, later leading the migration to React",
+                        "Used RxJS to create a responsive, event-driven UI for real-time ad preview and manipulation"
+                    ]
+                },
+                "Collaborated across engineering and sales to iterate on editor features based on artist feedback, ensuring the tool met the creative workflows of ad designers."
+            ],
+            "projects": []
+        },
+        {
+            "company_name": "Adcade",
+            "title": "Software Engineer",
+            "from": "Jan 2013",
+            "to": "Jan 2015",
+            "location": "New York, NY",
+            "description": "Built an HTML5 framework for creating gameified advertisements.",
+            "bullets": [
+                "Coordinated with major publishers including the New York Times, Condé Nast, Town & Country, and Stella Artois to understand campaign requirements and launch sophisticated interactive ad experiences.",
+                {
+                    "text": "Built an HTML5 competitor to Flash for gamified advertisements:",
+                    "subBullets": [
+                        "Created an interactive web framework in vanilla JavaScript for cross-browser ad experiences",
+                        "Implemented one of the first MRAID (Mobile Rich Media Ad Interface) specifications for displaying web ads in native mobile apps",
+                        "Delivered infrastructure for serving ads inside iOS and Android WebView components"
+                    ]
+                },
+                "Worked directly with brand and publisher teams to iterate on ad experiences, ensuring campaigns met both creative vision and technical constraints across web and mobile platforms."
+            ],
+            "projects": []
+        },
+        {
+            "company_name": "LearnBop",
+            "title": "Junior Software Engineer",
+            "from": "Jan 2011",
+            "to": "Jan 2013",
+            "location": "New York, NY",
+            "description": "Online tools for teaching high school math.",
+            "bullets": [
+                "Collaborated with educators to understand the needs of teachers and school administrators, delivering tools that helped identify struggling students and classrooms not meeting performance thresholds.",
+                {
+                    "text": "Built both sides of an interactive math learning platform:",
+                    "subBullets": [
+                        "Designed a lesson authoring tool for teachers with an embedded LaTeX renderer for clean math equations",
+                        "Built a student-facing UI for consuming interactive lessons",
+                        "Created analytics dashboards for administrators to track student and classroom performance"
+                    ]
+                },
+                "As a junior engineer, worked closely with senior developers and educators to iterate on features, gaining foundational experience in full-stack development and user-centered design."
+            ],
+            "projects": []
+        }
+    ]
+}

@@ -1,4 +1,9 @@
 let game;
+let resumeData;
+
+function preload() {
+  resumeData = loadJSON('resume_data.json');
+}
 
 function setup() {
   createCanvas(windowWidth, windowHeight);

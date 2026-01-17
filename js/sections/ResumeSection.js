@@ -1,52 +1,58 @@
 const ResumeSection = {
+  renderBullet(bullet) {
+    // Handle bullet with sub-bullets (object format)
+    if (typeof bullet === 'object' && bullet.text) {
+      const subBulletsHtml = (bullet.subBullets || [])
+        .map(sub => `                <li>${sub}</li>`)
+        .join('\n');
+
+      return `            <li>${bullet.text}
+              <ul class="sub-bullets">
+${subBulletsHtml}
+              </ul>
+            </li>`;
+    }
+
+    // Handle simple string bullet
+    return `            <li>${bullet}</li>`;
+  },
+
+  renderJobEntry(exp) {
+    const bullets = exp.bullets || [];
+
+    const bulletsHtml = bullets
+      .map(bullet => this.renderBullet(bullet))
+      .join('\n');
+
+    const bulletsList = bulletsHtml ? `
+          <ul>
+${bulletsHtml}
+          </ul>` : '';
+
+    return `
+          <div class="job-entry">
+            <h3>${exp.title}</h3>
+            <div class="company">${exp.company_name}</div>
+            <div class="date">${exp.from} - ${exp.to} | ${exp.location}</div>
+            <p>${exp.description}</p>${bulletsList}
+          </div>`;
+  },
+
   render() {
+    const data = window.resumeData || resumeData || {};
+    const experiences = data.experiences || [];
+
+    const jobEntriesHtml = experiences
+      .map(exp => this.renderJobEntry(exp))
+      .join('\n');
+
     return `
       <h1 class="section-title resume">Resume</h1>
       <div class="section-body">
 
         <div class="resume-section">
           <h2>Experience</h2>
-
-          <div class="job-entry">
-            <h3>Senior Software Engineer</h3>
-            <div class="company">Tech Company Inc.</div>
-            <div class="date">2022 - Present</div>
-            <p>Led development of customer-facing features, mentored junior developers, and improved system performance by 40%.</p>
-          </div>
-
-          <div class="job-entry">
-            <h3>Software Engineer</h3>
-            <div class="company">Startup XYZ</div>
-            <div class="date">2020 - 2022</div>
-            <p>Built and maintained RESTful APIs, implemented CI/CD pipelines, and contributed to architecture decisions.</p>
-          </div>
-
-          <div class="job-entry">
-            <h3>Junior Developer</h3>
-            <div class="company">Agency ABC</div>
-            <div class="date">2018 - 2020</div>
-            <p>Developed responsive websites for clients, collaborated with designers, and learned best practices.</p>
-          </div>
-        </div>
-
-        <div class="resume-section">
-          <h2>Education</h2>
-
-          <div class="job-entry">
-            <h3>B.S. Computer Science</h3>
-            <div class="company">University Name</div>
-            <div class="date">2014 - 2018</div>
-            <p>Focus on software engineering and data structures. Dean's List, GPA: 3.8</p>
-          </div>
-        </div>
-
-        <div class="resume-section">
-          <h2>Certifications</h2>
-          <ul>
-            <li>AWS Certified Solutions Architect</li>
-            <li>Google Cloud Professional Developer</li>
-            <li>MongoDB Certified Developer</li>
-          </ul>
+${jobEntriesHtml}
         </div>
 
       </div>

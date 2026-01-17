@@ -103,9 +103,28 @@ canvas {
   border-bottom: 1px solid #333;
 }
 
-.section-body li:before {
+.section-body > ul > li:before,
+.section-body ul:not(.sub-bullets) > li:before {
   content: "► ";
   color: #ADFF2F;
+}
+
+/* Sub-bullets styling */
+.sub-bullets {
+  margin-top: 10px;
+  padding-left: 20px;
+}
+
+.sub-bullets li {
+  border-bottom: none;
+  padding: 5px 0;
+  font-size: 16px;
+  color: #999;
+}
+
+.sub-bullets li:before {
+  content: "○ ";
+  color: #FFE66D;
 }
 
 /* Project Cards */
