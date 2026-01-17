@@ -41,6 +41,10 @@ jobs:
             --exclude '*.md' \
             ./ root@${{ secrets.DROPLET_IP }}:/var/www/game/
 
+      - name: Fix permissions
+        run: |
+          ssh root@${{ secrets.DROPLET_IP }} "chmod -R 755 /var/www/game && chown -R caddy:caddy /var/www/game"
+
       - name: Configure Caddy
         run: |
           ssh root@${{ secrets.DROPLET_IP }} "cat > /etc/caddy/Caddyfile << 'EOF'

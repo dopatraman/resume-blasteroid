@@ -82,7 +82,15 @@ rsync -avz --delete \
 log "Files synced to $REMOTE_DIR"
 
 # =============================================================================
-# 4. CONFIGURE CADDY (IDEMPOTENT)
+# 4. FIX PERMISSIONS
+# =============================================================================
+
+log "Setting permissions..."
+ssh "$REMOTE" "chmod -R 755 $REMOTE_DIR && chown -R caddy:caddy $REMOTE_DIR"
+log "Permissions set"
+
+# =============================================================================
+# 5. CONFIGURE CADDY (IDEMPOTENT)
 # =============================================================================
 
 log "Configuring Caddy..."
