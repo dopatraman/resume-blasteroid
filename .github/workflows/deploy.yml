@@ -1,0 +1,60 @@
+name: Deploy to Digital Ocean
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.DROPLET_IP }} >> ~/.ssh/known_hosts
+
+      - name: Install Caddy (if needed)
+        run: |
+          ssh root@${{ secrets.DROPLET_IP }} 'command -v caddy &>/dev/null || {
+            apt-get update -qq
+            apt-get install -y -qq debian-keyring debian-archive-keyring apt-transport-https curl
+            curl -1sLf "https://dl.cloudsmith.io/public/caddy/stable/gpg.key" | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg 2>/dev/null || true
+            curl -1sLf "https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt" | tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null
+            apt-get update -qq
+            apt-get install -y -qq caddy
+            systemctl enable caddy
+          }'
+
+      - name: Sync game files
+        run: |
+          ssh root@${{ secrets.DROPLET_IP }} "mkdir -p /var/www/game"
+          rsync -avz --delete \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'deploy.sh' \
+            --exclude '*.md' \
+            ./ root@${{ secrets.DROPLET_IP }}:/var/www/game/
+
+      - name: Configure Caddy
+        run: |
+          ssh root@${{ secrets.DROPLET_IP }} "cat > /etc/caddy/Caddyfile << 'EOF'
+          ${{ secrets.DOMAIN }} {
+              root * /var/www/game
+              file_server
+              encode gzip
+          }
+          EOF"
+
+      - name: Reload Caddy
+        run: |
+          ssh root@${{ secrets.DROPLET_IP }} "systemctl reload caddy"
+
+      - name: Deployment complete
+        run: |
+          echo "Deployed to https://${{ secrets.DOMAIN }}"

@@ -1,0 +1,37 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local development
+.claude/
+node_modules/
+.env
+.env.local
+
+# SSH keys (never commit these)
+*.pem
+deploy_key
+deploy_key.pub
+id_rsa
+id_rsa.pub
+
+# Logs
+*.log
+npm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+venv/
+.venv/
