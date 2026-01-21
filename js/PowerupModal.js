@@ -67,7 +67,7 @@ class PowerupModal {
     this.turnDirection = 0;
 
     // Modal dimensions
-    this.modalWidth = 400;
+    this.modalWidth = 500;
     this.modalHeight = 300;
   }
 
@@ -85,8 +85,9 @@ class PowerupModal {
   }
 
   updatePreview() {
-    let previewWidth = 300;
-    let previewHeight = 120;
+    // Use 80% of available width to leave margin
+    let previewWidth = 320;
+    let previewHeight = 100;
     let centerX = width / 2;
     let centerY = height / 2 + 30;
 
@@ -182,15 +183,15 @@ class PowerupModal {
 
     // Set up targets based on tier
     if (this.tier === 3) {
-      // Homing III: 3 targets
+      // Homing III: 3 targets (tighter spacing to fit in preview)
       this.previewTargets = [
-        createVector(cx + pw * 0.25, cy - 30),
-        createVector(cx + pw * 0.35, cy),
-        createVector(cx + pw * 0.25, cy + 30)
+        createVector(cx + pw * 0.2, cy - 25),
+        createVector(cx + pw * 0.3, cy),
+        createVector(cx + pw * 0.2, cy + 25)
       ];
     } else {
       // Homing I/II: single target
-      this.previewTargets = [createVector(cx + pw * 0.35, cy)];
+      this.previewTargets = [createVector(cx + pw * 0.3, cy)];
     }
 
     // Fire cycle
@@ -342,14 +343,14 @@ class PowerupModal {
           isPlume: true
         });
 
-        // Swerve particles when turning
+        // Swerve particles when turning (reduced velocity to stay in bounds)
         if (this.shipTurning) {
           let swerveAngle = backAngle + (this.turnDirection * -0.5);
           this.previewParticles.push({
             pos: createVector(backX, backY),
-            vel: p5.Vector.fromAngle(swerveAngle).mult(random(4, 6)),
-            life: 22,
-            maxLife: 22,
+            vel: p5.Vector.fromAngle(swerveAngle).mult(random(2.5, 4)),
+            life: 18,
+            maxLife: 18,
             color: random(['#FF6B35', '#FFE66D']),
             isSwerve: true
           });
@@ -461,20 +462,21 @@ class PowerupModal {
     textSize(24);
     this.drawSpacedText(this.name, cx, cy - mh / 2 + 40, 6);
 
-    // Description
+    // Description - dynamically size to fit
     fill(255, 255, 255, this.alpha * 0.9);
-    textSize(12);
-    this.drawSpacedText(this.description, cx, cy - mh / 2 + 75, 2);
+    let descFit = this.fitTextToWidth(this.description, mw - 40, 12, 2, 9, 0);
+    textSize(descFit.size);
+    this.drawSpacedText(this.description, cx, cy - mh / 2 + 75, descFit.spacing);
 
     // Preview area
     let previewY = cy + 20;
     let previewH = 100;
 
-    // Preview border
+    // Preview border (wider to match modal)
     stroke(r, g, b, this.alpha * 0.3);
     strokeWeight(1);
     noFill();
-    rect(cx - 150, previewY - previewH / 2, 300, previewH, 2);
+    rect(cx - 200, previewY - previewH / 2, 400, previewH, 2);
 
     // Render preview content
     this.renderPreview(previewY);
@@ -729,5 +731,40 @@ class PowerupModal {
       text(label[i], x + charWidth / 2, y);
       x += charWidth + spacing;
     }
+  }
+
+  // Calculate text width with letter spacing
+  getSpacedTextWidth(label, spacing) {
+    let totalWidth = 0;
+    for (let i = 0; i < label.length; i++) {
+      totalWidth += textWidth(label[i]);
+      if (i < label.length - 1) totalWidth += spacing;
+    }
+    return totalWidth;
+  }
+
+  // Find font size and spacing that fits text within maxWidth
+  fitTextToWidth(label, maxWidth, startSize, startSpacing, minSize, minSpacing) {
+    let size = startSize;
+    let spacing = startSpacing;
+
+    while (size >= minSize) {
+      textSize(size);
+      let w = this.getSpacedTextWidth(label, spacing);
+      if (w <= maxWidth) {
+        return { size, spacing };
+      }
+      // Try reducing spacing first
+      if (spacing > minSpacing) {
+        spacing = max(minSpacing, spacing - 0.5);
+      } else {
+        // Then reduce font size
+        size--;
+        spacing = startSpacing;  // Reset spacing for new size
+      }
+    }
+    // Return minimum values if nothing fits
+    textSize(minSize);
+    return { size: minSize, spacing: minSpacing };
   }
 }

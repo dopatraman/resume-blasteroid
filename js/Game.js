@@ -562,37 +562,52 @@ class Game {
     }
   }
 
-  // Homing II targeting methods
-  getAsteroidInFacingDirection() {
-    if (!this.ship || this.asteroids.length === 0) return null;
+  // Homing targeting methods - finds asteroids OR powerups
+  getTargetInFacingDirection() {
+    if (!this.ship) return null;
 
     let shipDir = p5.Vector.fromAngle(this.ship.rotation);
-    let closestAsteroid = null;
-    let closestDot = 0.5;  // cos(60°) = 0.5, only asteroids within 60° cone
+    let closestTarget = null;
+    let closestDot = 0.5;  // cos(60°) = 0.5, only targets within 60° cone
 
+    // Check asteroids
     for (let asteroid of this.asteroids) {
-      let toAsteroid = p5.Vector.sub(asteroid.pos, this.ship.pos);
-      toAsteroid.normalize();
-
-      let dot = shipDir.dot(toAsteroid);
-      // dot > 0 = in front, dot > 0.5 = within 60° cone
-      // Find the one most directly in front (highest dot product)
+      let toTarget = p5.Vector.sub(asteroid.pos, this.ship.pos);
+      toTarget.normalize();
+      let dot = shipDir.dot(toTarget);
       if (dot > closestDot) {
         closestDot = dot;
-        closestAsteroid = asteroid;
+        closestTarget = asteroid;
       }
     }
-    return closestAsteroid;
+
+    // Check powerups (floating powerups, not drops)
+    for (let powerup of this.powerups) {
+      let toTarget = p5.Vector.sub(powerup.pos, this.ship.pos);
+      toTarget.normalize();
+      let dot = shipDir.dot(toTarget);
+      if (dot > closestDot) {
+        closestDot = dot;
+        closestTarget = powerup;
+      }
+    }
+
+    return closestTarget;
   }
 
-  getTargetPointOnAsteroid(asteroid) {
-    // Point on asteroid border facing the ship
-    let toAsteroid = p5.Vector.sub(asteroid.pos, this.ship.pos);
-    let hitAngle = atan2(toAsteroid.y, toAsteroid.x);
+  // Legacy alias for compatibility
+  getAsteroidInFacingDirection() {
+    return this.getTargetInFacingDirection();
+  }
+
+  getTargetPointOnAsteroid(target) {
+    // Point on target border facing the ship (works for asteroids and powerups)
+    let toTarget = p5.Vector.sub(target.pos, this.ship.pos);
+    let hitAngle = atan2(toTarget.y, toTarget.x);
 
     let borderPoint = createVector(
-      asteroid.pos.x - cos(hitAngle) * asteroid.radius,
-      asteroid.pos.y - sin(hitAngle) * asteroid.radius
+      target.pos.x - cos(hitAngle) * target.radius,
+      target.pos.y - sin(hitAngle) * target.radius
     );
     return borderPoint;
   }
