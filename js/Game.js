@@ -3,7 +3,8 @@ const GameState = {
   PLAYING: 'playing',
   TRANSITIONING: 'transitioning',
   SECTION: 'section',
-  DEAD: 'dead'
+  DEAD: 'dead',
+  POWERUP_MODAL: 'powerup_modal'
 };
 
 class Game {
@@ -59,6 +60,9 @@ class Game {
     };
     this.powerupSpawnTimer = 0;
     this.powerupSpawnInterval = 600;  // 10 seconds at 60fps
+
+    // Powerup modal
+    this.powerupModal = null;
 
     // Fire rings moved to ParticleSystem
 
@@ -129,6 +133,8 @@ class Game {
       this.updateTransition();
     } else if (this.state === GameState.DEAD) {
       this.updateDeath();
+    } else if (this.state === GameState.POWERUP_MODAL) {
+      this.powerupModal.update();
     }
     // SECTION state - game paused, handled by DOM
   }
@@ -497,6 +503,8 @@ class Game {
   }
 
   activatePowerup(type) {
+    let newTier = 0;
+
     switch (type) {
       case 'homing':
         // Clear other powerup types
@@ -505,6 +513,7 @@ class Game {
         if (this.activePowerups.homing < 3) {
           this.activePowerups.homing++;
         }
+        newTier = this.activePowerups.homing;
         break;
       case 'chargeshot':
         // Clear other powerup types
@@ -514,6 +523,7 @@ class Game {
         if (this.activePowerups.chargeshot < 3) {
           this.activePowerups.chargeshot++;
         }
+        newTier = this.activePowerups.chargeshot;
         break;
       case 'boost':
         // Clear other powerup types
@@ -523,8 +533,20 @@ class Game {
         if (this.activePowerups.boost < 3) {
           this.activePowerups.boost++;
         }
+        newTier = this.activePowerups.boost;
         break;
     }
+
+    // Show modal for the new tier
+    if (newTier > 0) {
+      this.powerupModal = new PowerupModal(type, newTier);
+      this.state = GameState.POWERUP_MODAL;
+    }
+  }
+
+  dismissPowerupModal() {
+    this.powerupModal = null;
+    this.state = GameState.PLAYING;
   }
 
   managePowerups() {
@@ -1508,6 +1530,11 @@ class Game {
       if (this.state === GameState.PLAYING) {
         this.ui.drawInstructions();
       }
+    }
+
+    // Draw powerup modal on top of everything
+    if (this.state === GameState.POWERUP_MODAL && this.powerupModal) {
+      this.powerupModal.render();
     }
   }
 

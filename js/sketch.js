@@ -17,6 +17,12 @@ function draw() {
 }
 
 function keyPressed() {
+  // Dismiss powerup modal on any key
+  if (game.state === GameState.POWERUP_MODAL) {
+    game.dismissPowerupModal();
+    return false;
+  }
+
   if (key === ' ' || keyCode === 32) {
     game.startCharging();
     return false;  // Prevent page scroll
@@ -30,6 +36,14 @@ function keyPressed() {
   // ESC to return to game from section
   if (keyCode === ESCAPE && game.state === GameState.SECTION) {
     game.returnToGame();
+  }
+}
+
+function mousePressed() {
+  // Dismiss powerup modal on click
+  if (game.state === GameState.POWERUP_MODAL) {
+    game.dismissPowerupModal();
+    return false;
   }
 }
 
