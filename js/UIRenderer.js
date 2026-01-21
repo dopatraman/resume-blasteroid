@@ -29,26 +29,33 @@ class UIRenderer {
     // Draw ship
     this.game.ship.render();
 
-    // Draw "START" text above ship - Void Neon style
-    if (this.game.introTextAlpha > 0) {
-      let c = color(PALETTE.ship);
-      fill(red(c), green(c), blue(c), this.game.introTextAlpha);
-      noStroke();
-      textAlign(CENTER, CENTER);
-      textSize(14);
+    // Draw welcome text above ship - staggered lines (all caps with letter spacing)
+    let c = color(PALETTE.ship);
+    let lines = [
+      'WELCOME TO MY PORTFOLIO.',
+      'DIFFERENT ASTEROIDS UNLOCK DIFFERENT PARTS OF THE SITE.',
+      'FLY AROUND AND EXPLORE!'
+    ];
 
-      // Manual letter-spacing by drawing each character
-      let label = 'START';
-      let spacing = 4;
-      let charWidth = textWidth('S');
-      let totalWidth = label.length * charWidth + (label.length - 1) * spacing;
-      let startX = this.game.ship.pos.x - totalWidth / 2 + charWidth / 2;
+    noStroke();
+    textAlign(CENTER, CENTER);
+    textSize(14);
 
-      for (let i = 0; i < label.length; i++) {
-        text(label[i], startX + i * (charWidth + spacing), this.game.ship.pos.y - 50);
+    // Position lines above the ship with spacing
+    let lineHeight = 22;
+    let baseY = this.game.ship.pos.y - 70 - (lines.length - 1) * lineHeight / 2;
+    let letterSpacing = 4;
+
+    for (let i = 0; i < lines.length; i++) {
+      if (this.game.introLineAlphas[i] > 0) {
+        fill(red(c), green(c), blue(c), this.game.introLineAlphas[i]);
+        this.drawSpacedText(lines[i], this.game.ship.pos.x, baseY + i * lineHeight, letterSpacing);
       }
+    }
 
-      // Draw controls below ship - same style as START
+    // Draw controls below ship - use the last line's alpha for visibility
+    let controlsAlpha = this.game.introLineAlphas[2];
+    if (controlsAlpha > 0) {
       let controlsY = this.game.ship.pos.y + 70;
       let keySize = 16;
       let keyGap = 3;
@@ -57,19 +64,20 @@ class UIRenderer {
       let arrowsX = this.game.ship.pos.x - 50;
 
       // Up arrow
-      this.drawIntroKey(arrowsX, controlsY - keySize - keyGap, keySize, '↑');
+      this.drawIntroKey(arrowsX, controlsY - keySize - keyGap, keySize, '↑', null, controlsAlpha);
       // Left, Down, Right
-      this.drawIntroKey(arrowsX - keySize - keyGap, controlsY, keySize, '←');
-      this.drawIntroKey(arrowsX, controlsY, keySize, '↓');
-      this.drawIntroKey(arrowsX + keySize + keyGap, controlsY, keySize, '→');
+      this.drawIntroKey(arrowsX - keySize - keyGap, controlsY, keySize, '←', null, controlsAlpha);
+      this.drawIntroKey(arrowsX, controlsY, keySize, '↓', null, controlsAlpha);
+      this.drawIntroKey(arrowsX + keySize + keyGap, controlsY, keySize, '→', null, controlsAlpha);
 
       // "move" label
+      fill(red(c), green(c), blue(c), controlsAlpha);
       textSize(11);
       text('move', arrowsX, controlsY + keySize + 12);
 
       // Spacebar
       let spaceX = this.game.ship.pos.x + 50;
-      this.drawIntroKey(spaceX, controlsY, keySize, '', 40);
+      this.drawIntroKey(spaceX, controlsY, keySize, '', 40, controlsAlpha);
 
       // "shoot" label
       text('shoot', spaceX, controlsY + keySize + 12);
@@ -79,24 +87,41 @@ class UIRenderer {
     this.drawInstructions();
   }
 
-  drawIntroKey(x, y, size, label, width = null) {
+  drawIntroKey(x, y, size, label, width = null, alpha = 255) {
     let w = width || size;
     let c = color(PALETTE.ship);
     let r = 3;
 
     // Key outline (neon lime)
-    stroke(red(c), green(c), blue(c), this.game.introTextAlpha);
+    stroke(red(c), green(c), blue(c), alpha);
     strokeWeight(1);
     noFill();
     rect(x - w/2, y - size/2, w, size, r);
 
     // Key label
     if (label) {
-      fill(red(c), green(c), blue(c), this.game.introTextAlpha);
+      fill(red(c), green(c), blue(c), alpha);
       noStroke();
       textAlign(CENTER, CENTER);
       textSize(10);
       text(label, x, y);
+    }
+  }
+
+  drawSpacedText(label, centerX, y, spacing) {
+    // Calculate total width with spacing
+    let totalWidth = 0;
+    for (let i = 0; i < label.length; i++) {
+      totalWidth += textWidth(label[i]);
+      if (i < label.length - 1) totalWidth += spacing;
+    }
+
+    // Draw each character with spacing, centered on centerX
+    let x = centerX - totalWidth / 2;
+    for (let i = 0; i < label.length; i++) {
+      let charWidth = textWidth(label[i]);
+      text(label[i], x + charWidth / 2, y);
+      x += charWidth + spacing;
     }
   }
 

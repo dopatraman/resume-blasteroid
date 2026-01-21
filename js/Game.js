@@ -83,7 +83,7 @@ class Game {
     // Intro animation state
     this.introTimer = 0;
     // introParticles moved to ParticleSystem
-    this.introTextAlpha = 0;
+    this.introLineAlphas = [0, 0, 0];  // Alpha for each intro text line
 
     // Asteroid fade-in after intro
     this.asteroidFadeAlpha = 255;  // Start fully visible (normal gameplay)
@@ -105,7 +105,7 @@ class Game {
     this.state = GameState.INTRO;
     this.introTimer = 0;
     this.particleSystem.introParticles = [];
-    this.introTextAlpha = 0;
+    this.introLineAlphas = [0, 0, 0];
     // Don't spawn asteroids yet - wait for intro to complete
   }
 
@@ -161,23 +161,42 @@ class Game {
       if (p.life <= 0) this.particleSystem.introParticles.splice(i, 1);
     }
 
-    // Phase 2: Text fade in (frames 72-92)
-    if (this.introTimer > 72 && this.introTimer <= 92) {
-      this.introTextAlpha = map(this.introTimer, 72, 92, 0, 255);
+    // Phase 2: Line 1 fades in (frames 72-102)
+    if (this.introTimer > 72 && this.introTimer <= 102) {
+      this.introLineAlphas[0] = map(this.introTimer, 72, 102, 0, 255);
+    } else if (this.introTimer > 102 && this.introTimer <= 340) {
+      this.introLineAlphas[0] = 255;
     }
 
-    // Phase 3: Text visible (frames 92-132)
-    if (this.introTimer > 92 && this.introTimer <= 132) {
-      this.introTextAlpha = 255;
+    // Phase 3: Line 2 fades in (frames 132-162) - 30 frame gap
+    if (this.introTimer > 132 && this.introTimer <= 162) {
+      this.introLineAlphas[1] = map(this.introTimer, 132, 162, 0, 255);
+    } else if (this.introTimer > 162 && this.introTimer <= 340) {
+      this.introLineAlphas[1] = 255;
     }
 
-    // Phase 4: Text fade out (frames 132-157)
-    if (this.introTimer > 132 && this.introTimer <= 157) {
-      this.introTextAlpha = map(this.introTimer, 132, 157, 255, 0);
+    // Phase 4: Line 3 fades in (frames 192-222) - 30 frame gap
+    if (this.introTimer > 192 && this.introTimer <= 222) {
+      this.introLineAlphas[2] = map(this.introTimer, 192, 222, 0, 255);
+    } else if (this.introTimer > 222 && this.introTimer <= 340) {
+      this.introLineAlphas[2] = 255;
     }
 
-    // Phase 5: Spawn asteroids and start game
-    if (this.introTimer > 157) {
+    // Phase 5: All lines fade out together slowly (frames 340-400)
+    if (this.introTimer > 340 && this.introTimer <= 400) {
+      let fadeAlpha = map(this.introTimer, 340, 400, 255, 0);
+      this.introLineAlphas[0] = fadeAlpha;
+      this.introLineAlphas[1] = fadeAlpha;
+      this.introLineAlphas[2] = fadeAlpha;
+    } else if (this.introTimer > 400) {
+      // Keep at 0 after fade out completes
+      this.introLineAlphas[0] = 0;
+      this.introLineAlphas[1] = 0;
+      this.introLineAlphas[2] = 0;
+    }
+
+    // Phase 6: Spawn asteroids and start game
+    if (this.introTimer > 420) {
       this.spawnInitialAsteroids();
       this.asteroidFadeAlpha = 0;  // Start faded out
       this.state = GameState.PLAYING;
